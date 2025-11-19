@@ -190,7 +190,10 @@ function decodeBase(header: TarHeader, buffer: Uint8Array): void {
   if (buffer[345] !== 0) {
     header._prefix = decodeString(buffer, 345, 500);
   }
-  if (header.typeflag === TarTypeFlag.OLD_FILE && header.name.endsWith('/')) {
+  if (
+    header.typeflag === InternalTypeFlag.OLD_FILE &&
+    header.name.endsWith('/')
+  ) {
     header.typeflag = TarTypeFlag.DIRECTORY;
   }
 }
@@ -224,12 +227,12 @@ async function decodeHeader(
         await decodePax(reader, null, header);
         continue;
 
-      case TarTypeFlag.OLD_FILE:
+      case InternalTypeFlag.OLD_FILE:
+      case InternalTypeFlag.CONTIGUOUS_FILE:
       case TarTypeFlag.FILE:
       case TarTypeFlag.LINK:
       case TarTypeFlag.SYMLINK:
       case TarTypeFlag.DIRECTORY:
-      case TarTypeFlag.CONTIGUOUS_FILE:
         decodeBase(header, buffer);
         return header;
 
@@ -309,9 +312,9 @@ export async function* untar(
 
     let chunk: TarFile | TarChunk;
     switch (header.typeflag) {
-      case TarTypeFlag.OLD_FILE:
+      case InternalTypeFlag.OLD_FILE:
+      case InternalTypeFlag.CONTIGUOUS_FILE:
       case TarTypeFlag.FILE:
-      case TarTypeFlag.CONTIGUOUS_FILE:
         chunk = new TarFile(stream, header);
         break;
       case TarTypeFlag.LINK:

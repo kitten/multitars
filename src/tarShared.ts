@@ -9,6 +9,8 @@ export function blockPad(size: number): number {
 }
 
 export const enum InternalTypeFlag {
+  OLD_FILE = 0 /* '\0': regular file */,
+  CONTIGUOUS_FILE = 55 /* '7': contiguous file */,
   CHAR_DEV = 51 /* '3': character device (special) */,
   BLOCK_DEV = 52 /* '4': block device (special) */,
   FIFO = 54 /* '6': FIFO (special) */,
@@ -20,13 +22,11 @@ export const enum InternalTypeFlag {
   PAX = 120 /* 'x': extended header (PAX) */,
 }
 
-export const enum TarTypeFlag {
-  OLD_FILE = 0 /* '\0': regular file */,
+export enum TarTypeFlag {
   FILE = 48 /* '0': regular file */,
   LINK = 49 /* '1': link */,
   SYMLINK = 50 /* '2': symbolic link */,
   DIRECTORY = 53 /* '5': directory */,
-  CONTIGUOUS_FILE = 55 /* '7': contiguous file */,
 }
 
 interface TarChunkHeader {
@@ -61,7 +61,7 @@ export function initTarHeader(gax: TarHeader | null): TarHeader {
     gid: gax?.gid || 0,
     size: gax?.size || 0,
     mtime: gax?.mtime || 0,
-    typeflag: gax?.typeflag || TarTypeFlag.OLD_FILE,
+    typeflag: gax?.typeflag || TarTypeFlag.FILE,
     linkname: gax?.linkname || null,
     uname: gax?.uname || null,
     gname: gax?.gname || null,
@@ -88,10 +88,7 @@ const getTarLinkName = (header: TarHeader): string | null =>
 const getTarSize = (header: TarHeader): number =>
   header._paxSize || header.size;
 
-type TarChunkTypeFlag = Exclude<
-  TarTypeFlag,
-  TarTypeFlag.FILE | TarTypeFlag.CONTIGUOUS_FILE
->;
+type TarChunkTypeFlag = Exclude<TarTypeFlag, TarTypeFlag.FILE>;
 
 export class TarChunk extends StreamFile implements TarChunkHeader {
   mode: number;
