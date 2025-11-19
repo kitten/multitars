@@ -1,0 +1,332 @@
+import { ReadableStreamBlockReader } from './reader';
+
+import {
+  BLOCK_SIZE,
+  CHECKSUM_INITIAL,
+  TarTypeFlag,
+  InternalTypeFlag,
+  TarHeader,
+  TarFile,
+  TarChunk,
+  initTarHeader,
+  blockPad,
+} from './tarShared';
+
+const DECODER = new TextDecoder();
+
+async function decodePax(
+  reader: ReadableStreamBlockReader,
+  gax: TarHeader | null,
+  header: TarHeader
+) {
+  let remaining = header.size;
+  let pax = '';
+  while (remaining > 0) {
+    let block = await reader.read();
+    if (!block)
+      throw new Error('Invalid Tar: Unexpected EOF while parsing PAX data');
+    remaining -= block.byteLength;
+    if (remaining < 0) block = block.subarray(0, remaining);
+    pax += DECODER.decode(block, { stream: true });
+  }
+  for (let from = 0, to = 0; from < pax.length; to = 0) {
+    while (to < pax.length && pax.charCodeAt(to) !== 32) to++;
+    const length = parseInt(pax.slice(from, to), 10);
+    if (!length || length != length) break;
+    if (pax.charCodeAt(from + length - 1) !== 10) break;
+    const entry = pax.slice(to + 1, from + length - 1);
+    const keyIndex = entry.indexOf('=');
+    if (keyIndex === -1) break;
+    const key = entry.slice(0, keyIndex);
+    const value = entry.slice(keyIndex + 1);
+    from += length;
+    switch (key) {
+      case 'path':
+        if (gax) gax._paxName = value;
+        header._paxName = value;
+        break;
+      case 'linkpath':
+        if (gax) gax._paxLinkName = value;
+        header._paxLinkName = value;
+        break;
+      case 'size':
+        if (gax) gax._paxSize = +value;
+        header._paxSize = +value;
+        break;
+      case 'gid':
+      case 'uid':
+      case 'mode':
+      case 'mtime':
+        if (gax) gax[key] = +value;
+        header[key] = +value;
+        break;
+      case 'uname':
+      case 'gname':
+        if (gax) gax[key] = value;
+        header[key] = value;
+        break;
+    }
+  }
+}
+
+function getTypeFlag(
+  bytes: Uint8Array
+): TarTypeFlag | InternalTypeFlag | ({} & number) {
+  return bytes[156];
+}
+
+function checkMagic(bytes: Uint8Array): boolean {
+  return (
+    bytes[257] === 0x75 &&
+    bytes[258] === 0x73 &&
+    bytes[259] === 0x74 &&
+    bytes[260] === 0x61 &&
+    bytes[261] === 0x72 &&
+    (bytes[262] === 0x00 || bytes[262] === 0x20)
+  );
+}
+
+function checkChecksum(bytes: Uint8Array): number {
+  let sum = CHECKSUM_INITIAL;
+  const chksum = decodeOctal(bytes, 148, 156);
+  if (chksum === sum) return sum;
+  for (let idx = 0; idx < 148; idx++) sum += bytes[idx];
+  for (let idx = 156; idx < 512; idx++) sum += bytes[idx];
+  return sum === chksum ? sum : 0;
+}
+
+function decodeString(bytes: Uint8Array, from: number, to: number): string {
+  let end = from;
+  while (end < to && bytes[end] !== 0) end++;
+  return end > from ? DECODER.decode(bytes.subarray(from, end)) : '';
+}
+
+async function decodeLongString(
+  reader: ReadableStreamBlockReader,
+  size: number
+): Promise<string> {
+  let remaining = size;
+  let output = '';
+  let endIndex = -1;
+  while (remaining > 0) {
+    let block = await reader.read();
+    if (!block)
+      throw new Error('Invalid Tar: Unexpected EOF while parsing long string');
+    if (endIndex === -1) {
+      // We fundamentally don't trust that the length is accurate, and we cut off
+      // any strings we parse at the trailing zero byte
+      endIndex = block.indexOf(0);
+      if (endIndex > -1) block = block.subarray(0, endIndex);
+      output += DECODER.decode(block, { stream: true });
+    }
+    break;
+  }
+  output += DECODER.decode();
+  return output;
+}
+
+function decodeOctal(bytes: Uint8Array, from: number, to: number): number {
+  const end = to - 1;
+  let val = 0;
+  let idx = to;
+  if (bytes[from] === 0x80) {
+    while (idx-- > from + 1) val += bytes[idx] * 256 ** (end - idx);
+    return val;
+  } else if (bytes[from] === 0xff) {
+    let flipped = false;
+    while (idx-- > from) {
+      const f = flipped
+        ? 0xff ^ bytes[idx] // ones comp
+        : (0xff ^ bytes[idx]) + 1; // twos comp
+      val -= (f & 0xff) * 256 ** (end - idx);
+      flipped ||= bytes[idx] !== 0;
+    }
+    return val;
+  } else {
+    idx = from;
+    while (idx < to && (bytes[idx] === 32 || bytes[idx] === 0)) idx++;
+    if (end !== idx) val = parseInt(decodeString(bytes, idx, to), 8);
+    return val == val ? val || 0 : 0;
+  }
+}
+
+function decodeBase(header: TarHeader, buffer: Uint8Array): void {
+  /*
+  | Field Name | Offset | Length | Field Type                 |
+  | ---------- | ------ | ------ | -------------------------- |
+  | name       | 0 B    | 100 B  | NUL-terminated if NUL fits |
+  | mode       | 100 B  | 8 B    |                            |
+  | uid        | 108 B  | 8 B    |                            |
+  | gid        | 116 B  | 8 B    |                            |
+  | size       | 124 B  | 12 B   |                            |
+  | mtime      | 136 B  | 12 B   |                            |
+  | chksum     | 148 B  | 8 B    |                            |
+  | typeflag   | 156 B  | 1 B    | see below                  |
+  | linkname   | 157 B  | 100 B  | NUL-terminated if NUL fits |
+  | magic      | 257 B  | 6 B    | must be TMAGIC (NUL term.) |
+  | version    | 263 B  | 2 B    | must be TVERSION           |
+  | uname      | 265 B  | 32 B   | NUL-terminated             |
+  | gname      | 297 B  | 32 B   | NUL-terminated             |
+  | devmajor   | 329 B  | 8 B    |                            |
+  | devminor   | 337 B  | 8 B    |                            |
+  | prefix     | 345 B  | 155 B  | NUL-terminated if NUL fits |
+  */
+  header.name = decodeString(buffer, 0, 100);
+  header.mode ||= decodeOctal(buffer, 100, 108);
+  header.uid ||= decodeOctal(buffer, 108, 116);
+  header.gid ||= decodeOctal(buffer, 116, 124);
+  header.size = decodeOctal(buffer, 124, 136);
+  header.mtime ||= decodeOctal(buffer, 136, 148);
+  // CHECKSUM: 148 - 156
+  header.typeflag = getTypeFlag(buffer);
+  header.linkname = decodeString(buffer, 157, 257) || null;
+  // TMAGIC: 257 - 263
+  // TVERSION: 263 - 265
+  header.uname ||= decodeString(buffer, 265, 297) || null;
+  header.gname ||= decodeString(buffer, 297, 329) || null;
+  header.devmajor = decodeOctal(buffer, 329, 337);
+  header.devminor = decodeOctal(buffer, 337, 345);
+
+  if (buffer[345] !== 0) {
+    header._prefix = decodeString(buffer, 345, 500);
+  }
+  if (header.typeflag === TarTypeFlag.OLD_FILE && header.name.endsWith('/')) {
+    header.typeflag = TarTypeFlag.DIRECTORY;
+  }
+}
+
+async function decodeHeader(
+  reader: ReadableStreamBlockReader,
+  gax: TarHeader
+): Promise<TarHeader | undefined> {
+  let buffer: Uint8Array | null;
+  let header = initTarHeader(gax);
+  while ((buffer = await reader.read()) && checkMagic(buffer)) {
+    switch (getTypeFlag(buffer)) {
+      case InternalTypeFlag.LONG_NAME:
+      case InternalTypeFlag.OLD_LONG_NAME:
+        decodeBase(header, buffer);
+        header._longName = await decodeLongString(reader, header.size);
+        continue;
+
+      case InternalTypeFlag.LONG_LINK_NAME:
+        decodeBase(header, buffer);
+        header._longLinkName = await decodeLongString(reader, header.size);
+        continue;
+
+      case InternalTypeFlag.GAX:
+        decodeBase(header, buffer);
+        await decodePax(reader, gax, header);
+        continue;
+
+      case InternalTypeFlag.PAX:
+        decodeBase(header, buffer);
+        await decodePax(reader, null, header);
+        continue;
+
+      case TarTypeFlag.OLD_FILE:
+      case TarTypeFlag.FILE:
+      case TarTypeFlag.LINK:
+      case TarTypeFlag.SYMLINK:
+      case TarTypeFlag.DIRECTORY:
+      case TarTypeFlag.CONTIGUOUS_FILE:
+        decodeBase(header, buffer);
+        return header;
+
+      default:
+        // Usually we don't check the checksum, but if we don't know the type, we should
+        // double check it. If it's invalid we can be sure we have an invalid block
+        if (!checkChecksum(buffer)) {
+          throw new Error(
+            'Invalid Tar: Unexpected block with invalid checksum'
+          );
+        }
+        decodeBase(header, buffer);
+        return header;
+    }
+  }
+  for (let idx = 0; buffer && idx < buffer.byteLength; idx++)
+    if (buffer[idx] !== 0)
+      throw new Error('Invalid Tar: Unexpected non-header block');
+  return undefined;
+}
+
+// NOTE(@kitten): We don't really want to copy but something isn't applying backpressure correctly
+function copyUint8Array(src: Uint8Array) {
+  const dst = new Uint8Array(src.byteLength);
+  dst.set(src);
+  return dst;
+}
+
+/** Provide tar entry iterator */
+export async function* untar(
+  stream: ReadableStream
+): AsyncGenerator<TarFile | TarChunk> {
+  const gax = initTarHeader(null);
+  const reader = new ReadableStreamBlockReader(stream, BLOCK_SIZE);
+  const streamParams = new ByteLengthQueuingStrategy({ highWaterMark: 0 });
+
+  let header: TarHeader | undefined;
+  while ((header = await decodeHeader(reader, gax)) != null) {
+    const pad = blockPad(header.size);
+    let consumedTrailer = pad === 0;
+    let remaining = header._paxSize || header.size;
+    let cancel: () => Promise<void>;
+    const stream = new ReadableStream(
+      {
+        // NOTE(@kitten): This is needed in Cloudflare to attach the expected size to the stream
+        expectedLength: header.size,
+        cancel: (cancel = async function cancel() {
+          if (!consumedTrailer) {
+            consumedTrailer = true;
+            remaining += pad;
+          }
+          if (remaining > 0) {
+            const skipped = await reader.skip(remaining);
+            if (skipped > 0) throw new Error('Invalid Tar: Unexpected EOF');
+            remaining = 0;
+          }
+        }),
+        async pull(controller) {
+          if (remaining) {
+            const buffer = await reader.pull(remaining);
+            if (!buffer) throw new Error('Invalid Tar: Unexpected EOF');
+            remaining -= buffer.byteLength;
+            controller.enqueue(copyUint8Array(buffer));
+          }
+          if (!remaining) {
+            if (!consumedTrailer) {
+              consumedTrailer = true;
+              const skipped = await reader.skip(pad);
+              if (skipped > 0) throw new Error('Invalid Tar: Unexpected EOF');
+            }
+            controller.close();
+          }
+        },
+      },
+      streamParams
+    );
+
+    let chunk: TarFile | TarChunk;
+    switch (header.typeflag) {
+      case TarTypeFlag.OLD_FILE:
+      case TarTypeFlag.FILE:
+      case TarTypeFlag.CONTIGUOUS_FILE:
+        chunk = new TarFile(stream, header);
+        break;
+      case TarTypeFlag.LINK:
+      case TarTypeFlag.SYMLINK:
+      case TarTypeFlag.DIRECTORY:
+        chunk = new TarChunk(stream, header);
+        break;
+      default:
+        await cancel();
+        continue;
+    }
+
+    yield chunk;
+    if (remaining > 0 || !consumedTrailer) {
+      await (stream.locked ? cancel() : stream.cancel());
+    }
+  }
+}

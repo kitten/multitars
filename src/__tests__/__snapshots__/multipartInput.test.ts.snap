@@ -1,0 +1,94 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`parseMultipart > extracts a file from a multipart body successfully (chunked) 1`] = `
+[
+  {
+    "name": "filename-a.txt",
+    "size": 0,
+    "text": "test content a",
+  },
+  {
+    "name": "filename-b.txt",
+    "size": 0,
+    "text": "test content b",
+  },
+]
+`;
+
+exports[`parseMultipart > extracts a file from a multipart body successfully (unchunked) 1`] = `
+[
+  {
+    "name": "filename-a.txt",
+    "size": 0,
+    "text": "test content a",
+    "type": "application/octet-stream",
+  },
+  {
+    "name": "filename-b.txt",
+    "size": 0,
+    "text": "test content b",
+    "type": "application/octet-stream",
+  },
+]
+`;
+
+exports[`parseMultipart > extracts a file from a multipart body successfully if the first file is skipped (chunked) 1`] = `
+[
+  {
+    "name": "filename-b.txt",
+    "size": 0,
+    "text": "test content b",
+    "type": "application/octet-stream",
+  },
+]
+`;
+
+exports[`parseMultipart > extracts a file from a multipart body successfully if the first file is skipped (unchunked) 1`] = `
+[
+  {
+    "name": "filename-b.txt",
+    "size": 0,
+    "text": "test content b",
+    "type": "application/octet-stream",
+  },
+]
+`;
+
+exports[`parseMultipart > extracts streamMultipart output entries successfully if the first entry is skipped 1`] = `
+[
+  {
+    "name": "b",
+    "size": 0,
+    "text": "test-content-b",
+    "type": "application/octet-stream",
+  },
+]
+`;
+
+exports[`parseMultipart > extracts streamMultipart output successfully 1`] = `
+[
+  {
+    "name": "filename-a.txt",
+    "size": 14,
+    "text": "test content a",
+    "type": "plain/text",
+  },
+  {
+    "name": "filename-b.txt",
+    "size": 14,
+    "text": "test content b",
+    "type": "application/octet-stream",
+  },
+]
+`;
+
+exports[`parseMultipart > extracts streamMultipart output successfully if the first file is skipped 1`] = `
+[
+  {
+    "name": "filename-b.txt",
+    "size": 14,
+    "text": "test content b",
+    "type": "application/octet-stream",
+  },
+]
+`;
