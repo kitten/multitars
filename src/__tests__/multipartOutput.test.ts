@@ -1,6 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { streamMultipart } from '../multipartOutput';
 import { iteratorToStream, streamToText } from './utils';
+
+vi.mock('../conversions', async importOriginal => ({
+  ...(await importOriginal()),
+  BOUNDARY_ID: '----formdata-multitars',
+}));
 
 describe('streamMultipart', () => {
   it('creates a multipart stream of strings', async () => {

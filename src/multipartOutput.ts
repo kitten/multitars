@@ -1,9 +1,8 @@
 import { encodeName } from './multipartEncoding';
-import { streamToIterator } from './conversions';
+import { streamToIterator, BOUNDARY_ID } from './conversions';
 
 const CRLF = '\r\n';
 const BOUNDARY_HYPHEN_CHARS = '--';
-const BOUNDARY_ID = '----formdata-multitars';
 
 const FORM_FOOTER =
   BOUNDARY_HYPHEN_CHARS + BOUNDARY_ID + BOUNDARY_HYPHEN_CHARS + CRLF + CRLF;
