@@ -406,4 +406,40 @@ describe(readUntilBoundary, () => {
       ]
     `);
   });
+
+  it('handles randomized boundaries', async () => {
+    function rand(length: number): string {
+      let result = '';
+      const characters =
+        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+      const charactersLength = characters.length;
+      for (let i = 0; i < length; i++)
+        result += characters.charAt(
+          Math.floor(Math.random() * charactersLength)
+        );
+      return result;
+    }
+
+    for (let ITERATION = 0; ITERATION < 500; ITERATION++) {
+      const before = rand(Math.round(Math.random() * 100));
+      const after = rand(Math.round(Math.random() * 100));
+      const stream = iteratorToStream(
+        streamText(`${before}${BOUNDARY}${after}`, 4)
+      );
+      const reader = new ReadableStreamBlockReader(stream, 12);
+      // Reads data until a boundary across two chunks
+      let actual = '';
+      const decoder = new TextDecoder();
+      for await (const chunk of readUntilBoundary(reader, utf8Encode(BOUNDARY)))
+        actual += decoder.decode(chunk!);
+      expect(actual).toBe(before);
+
+      // Continues exposing data after the boundary:
+      actual = '';
+      let chunk: Uint8Array | null;
+      while ((chunk = await reader.pull())) actual += decoder.decode(chunk);
+
+      expect(actual).toBe(after);
+    }
+  });
 });
