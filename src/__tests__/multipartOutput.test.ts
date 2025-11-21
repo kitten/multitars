@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { streamMultipart } from '../multipartOutput';
-import { iteratorToStream, streamToText } from './utils';
+import { iterableToStream, streamToText } from './utils';
 
 vi.mock('../conversions', async importOriginal => ({
   ...(await importOriginal()),
@@ -16,7 +16,7 @@ describe('streamMultipart', () => {
       })()
     );
 
-    expect(await streamToText(iteratorToStream(data))).toMatchInlineSnapshot(`
+    expect(await streamToText(iterableToStream(data))).toMatchInlineSnapshot(`
       "------formdata-multitars
       Content-Disposition: form-data; name="a"
 
@@ -39,7 +39,7 @@ describe('streamMultipart', () => {
       })()
     );
 
-    expect(await streamToText(iteratorToStream(data))).toMatchInlineSnapshot(`
+    expect(await streamToText(iterableToStream(data))).toMatchInlineSnapshot(`
       "------formdata-multitars
       Content-Disposition: form-data; name="a"; filename="1.txt"
       Content-Length: 1
@@ -64,7 +64,7 @@ describe('streamMultipart', () => {
       })()
     );
 
-    expect(await streamToText(iteratorToStream(data))).toMatchInlineSnapshot(`
+    expect(await streamToText(iterableToStream(data))).toMatchInlineSnapshot(`
       "------formdata-multitars
       Content-Disposition: form-data; name="a"; filename="1.txt"
       Content-Type: text/plain
@@ -91,7 +91,7 @@ describe('streamMultipart', () => {
       })()
     );
 
-    expect(await streamToText(iteratorToStream(data))).toMatchInlineSnapshot(`
+    expect(await streamToText(iterableToStream(data))).toMatchInlineSnapshot(`
       "------formdata-multitars
       Content-Disposition: form-data; name="newline%0Afi+l en%22am👍e.txt"; filename="newline%0Afi+l en%22am👍e.txt"
       Content-Length: 1

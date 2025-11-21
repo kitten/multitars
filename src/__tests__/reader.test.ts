@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { ReadableStreamBlockReader, readUntilBoundary } from '../reader';
 import {
   utf8Encode,
-  iteratorToStream,
+  iterableToStream,
   streamChunks,
   streamText,
 } from './utils';
@@ -11,7 +11,7 @@ import {
 // to reach 100% test coverage (pnpm test --coverage)
 describe(ReadableStreamBlockReader, () => {
   it('allows block-wise reads from a byte stream emitting right-sized chunks', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamChunks({ numChunks: 3, chunkSize: 4 })
     );
     const reader = new ReadableStreamBlockReader(stream, 4);
@@ -25,7 +25,7 @@ describe(ReadableStreamBlockReader, () => {
   });
 
   it('allows block-wise reads from a byte stream emitting undersized chunks (even)', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamChunks({ numChunks: 4, chunkSize: 3 })
     );
     const reader = new ReadableStreamBlockReader(stream, 4);
@@ -39,7 +39,7 @@ describe(ReadableStreamBlockReader, () => {
   });
 
   it('allows block-wise reads from a byte stream emitting undersized chunks (uneven)', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamChunks({ numChunks: 5, chunkSize: 3 })
     );
     const reader = new ReadableStreamBlockReader(stream, 4);
@@ -54,7 +54,7 @@ describe(ReadableStreamBlockReader, () => {
   });
 
   it('allows block-wise reads from a byte stream emitting oversized chunks (even)', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamChunks({ numChunks: 3, chunkSize: 4 })
     );
     const reader = new ReadableStreamBlockReader(stream, 3);
@@ -67,7 +67,7 @@ describe(ReadableStreamBlockReader, () => {
   });
 
   it('allows block-wise reads from a byte stream emitting oversized chunks (uneven)', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamChunks({ numChunks: 2, chunkSize: 4 })
     );
     const reader = new ReadableStreamBlockReader(stream, 3);
@@ -79,7 +79,7 @@ describe(ReadableStreamBlockReader, () => {
   });
 
   it('allows block-wise reads from a byte stream emitting multiply-oversized chunks (even)', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamChunks({ numChunks: 2, chunkSize: 5 })
     );
     const reader = new ReadableStreamBlockReader(stream, 2);
@@ -93,7 +93,7 @@ describe(ReadableStreamBlockReader, () => {
   });
 
   it('allows partial final blocks to be returned when `true` is passed to read()', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamChunks({ numChunks: 2, chunkSize: 4 })
     );
     const reader = new ReadableStreamBlockReader(stream, 3);
@@ -104,7 +104,7 @@ describe(ReadableStreamBlockReader, () => {
   });
 
   it('allows block-wise reads from a byte stream emitting multiply-oversized chunks (uneven)', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamChunks({ numChunks: 1, chunkSize: 5 })
     );
     const reader = new ReadableStreamBlockReader(stream, 2);
@@ -115,7 +115,7 @@ describe(ReadableStreamBlockReader, () => {
   });
 
   it('allows block-wise reads from a byte stream emitting multiply-oversized chunks (single)', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamChunks({ numChunks: 1, chunkSize: 10 })
     );
     const reader = new ReadableStreamBlockReader(stream, 4);
@@ -126,7 +126,7 @@ describe(ReadableStreamBlockReader, () => {
   });
 
   it('allows skipping bytes for undersized chunks at end of blocks', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamChunks({ numChunks: 4, chunkSize: 2 })
     );
     const reader = new ReadableStreamBlockReader(stream, 4);
@@ -137,7 +137,7 @@ describe(ReadableStreamBlockReader, () => {
   });
 
   it('allows skipping bytes for undersized chunks at beginning of blocks', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamChunks({ numChunks: 4, chunkSize: 2 })
     );
     const reader = new ReadableStreamBlockReader(stream, 4);
@@ -148,7 +148,7 @@ describe(ReadableStreamBlockReader, () => {
   });
 
   it('allows skipping bytes for oversized chunks at end of blocks', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamChunks({ numChunks: 1, chunkSize: 4 })
     );
     const reader = new ReadableStreamBlockReader(stream, 2);
@@ -159,7 +159,7 @@ describe(ReadableStreamBlockReader, () => {
   });
 
   it('allows skipping bytes for oversized chunks at beginning of blocks', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamChunks({ numChunks: 1, chunkSize: 4 })
     );
     const reader = new ReadableStreamBlockReader(stream, 2);
@@ -170,7 +170,7 @@ describe(ReadableStreamBlockReader, () => {
   });
 
   it('allows skipping bytes for multiply-oversized chunks', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamChunks({ numChunks: 1, chunkSize: 6 })
     );
     const reader = new ReadableStreamBlockReader(stream, 2);
@@ -182,7 +182,7 @@ describe(ReadableStreamBlockReader, () => {
   });
 
   it('allows skipping uneven number of bytes', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamChunks({ numChunks: 3, chunkSize: 2 })
     );
     const reader = new ReadableStreamBlockReader(stream, 4);
@@ -193,7 +193,7 @@ describe(ReadableStreamBlockReader, () => {
   });
 
   it('allows skipping excessive number of bytes', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamChunks({ numChunks: 3, chunkSize: 2 })
     );
     const reader = new ReadableStreamBlockReader(stream, 4);
@@ -203,7 +203,7 @@ describe(ReadableStreamBlockReader, () => {
   });
 
   it('allows pulling chunks as-is with matching input size', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamChunks({ numChunks: 2, chunkSize: 4 })
     );
     const reader = new ReadableStreamBlockReader(stream, 2);
@@ -213,7 +213,7 @@ describe(ReadableStreamBlockReader, () => {
   });
 
   it('allows pulling chunks as-is with matching output size', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamChunks({ numChunks: 2, chunkSize: 4 })
     );
     const reader = new ReadableStreamBlockReader(stream, 2);
@@ -224,7 +224,7 @@ describe(ReadableStreamBlockReader, () => {
   });
 
   it('respects pushed back buffers', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamChunks({ numChunks: 1, chunkSize: 8 })
     );
     const reader = new ReadableStreamBlockReader(stream, 4);
@@ -238,7 +238,7 @@ describe(ReadableStreamBlockReader, () => {
   });
 
   it('combines pushed back buffers with other buffers', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamChunks({ numChunks: 1, chunkSize: 8 })
     );
     const reader = new ReadableStreamBlockReader(stream, 4);
@@ -257,7 +257,7 @@ describe(readUntilBoundary, () => {
 
   it('throws if chunk size is smaller than boundary', async () => {
     await expect(async () => {
-      const stream = iteratorToStream(streamText('', 1));
+      const stream = iterableToStream(streamText('', 1));
       const reader = new ReadableStreamBlockReader(stream, 4);
       for await (const _chunk of readUntilBoundary(
         reader,
@@ -269,7 +269,7 @@ describe(readUntilBoundary, () => {
   });
 
   it('returns bytes until boundary, even between two chunks', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamText(`once upon a time...${BOUNDARY}...the end of the story`, 4)
     );
     const reader = new ReadableStreamBlockReader(stream, 12);
@@ -291,7 +291,7 @@ describe(readUntilBoundary, () => {
   });
 
   it('handles boundary-like strings', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamText(
         `once upon a time...${BOUNDARY.slice(0, -2)}${BOUNDARY}...the end of the story`,
         4
@@ -316,7 +316,7 @@ describe(readUntilBoundary, () => {
   });
 
   it('returns immediately when boundary is first item', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamText(BOUNDARY + 'test', BOUNDARY.length)
     );
     const reader = new ReadableStreamBlockReader(stream, BOUNDARY.length);
@@ -330,7 +330,7 @@ describe(readUntilBoundary, () => {
   });
 
   it('aborts with null yield for EOF', async () => {
-    const stream = iteratorToStream(streamText('some longer string', 4));
+    const stream = iterableToStream(streamText('some longer string', 4));
     const reader = new ReadableStreamBlockReader(stream, 12);
     const chunks: (Uint8Array | null)[] = [];
     for await (const chunk of readUntilBoundary(reader, utf8Encode(BOUNDARY))) {
@@ -372,7 +372,7 @@ describe(readUntilBoundary, () => {
   });
 
   it('aborts with null yield for EOF while looking at partial boundary', async () => {
-    const stream = iteratorToStream(
+    const stream = iterableToStream(
       streamText(`some longer string${BOUNDARY.slice(0, 4)}`, 4)
     );
     const reader = new ReadableStreamBlockReader(stream, 12);
@@ -423,7 +423,7 @@ describe(readUntilBoundary, () => {
     for (let ITERATION = 0; ITERATION < 500; ITERATION++) {
       const before = rand(Math.round(Math.random() * 100));
       const after = rand(Math.round(Math.random() * 100));
-      const stream = iteratorToStream(
+      const stream = iterableToStream(
         streamText(`${before}${BOUNDARY}${after}`, 4)
       );
       const reader = new ReadableStreamBlockReader(stream, 12);

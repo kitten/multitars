@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { parseMultipart } from '../multipartInput';
 import { multipartContentType, streamMultipart } from '../multipartOutput';
-import { iteratorToStream } from './utils';
+import { iterableToStream } from './utils';
 
 function chunk(
   readable: ReadableStream<Uint8Array>
@@ -141,7 +141,7 @@ describe('parseMultipart', () => {
   });
 
   it('extracts streamMultipart output successfully', async () => {
-    const body = iteratorToStream(
+    const body = iterableToStream(
       streamMultipart(
         (async function* () {
           yield [
@@ -171,7 +171,7 @@ describe('parseMultipart', () => {
   });
 
   it('extracts streamMultipart output successfully if the first file is skipped', async () => {
-    const body = iteratorToStream(
+    const body = iterableToStream(
       streamMultipart(
         (async function* () {
           yield [
@@ -208,7 +208,7 @@ describe('parseMultipart', () => {
   });
 
   it('extracts streamMultipart output entries successfully if the first entry is skipped', async () => {
-    const body = iteratorToStream(
+    const body = iterableToStream(
       streamMultipart(
         (async function* () {
           yield ['a', 'test-content-a'];

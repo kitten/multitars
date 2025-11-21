@@ -3,7 +3,7 @@ export type ReadableStreamLike<T> =
   | AsyncIterable<T>
   | Iterable<T>;
 
-export function streamToIterator<T>(
+export function streamToAsyncIterable<T>(
   stream: ReadableStream<T>
 ): AsyncIterable<T> {
   if (!stream[Symbol.asyncIterator]) {

@@ -1,11 +1,11 @@
-import { streamToIterator } from './conversions';
+import { streamToAsyncIterable } from './conversions';
 
 async function streamToBuffer(
   stream: ReadableStream<Uint8Array>
 ): Promise<Uint8Array<ArrayBuffer>> {
   let byteLength = 0;
   const chunks: Uint8Array[] = [];
-  for await (const chunk of streamToIterator(stream)) {
+  for await (const chunk of streamToAsyncIterable(stream)) {
     byteLength += chunk.byteLength;
     chunks.push(chunk);
   }
@@ -27,7 +27,7 @@ async function streamToText(
 ): Promise<string> {
   let output = '';
   const decoder = new TextDecoder();
-  for await (const chunk of streamToIterator(stream))
+  for await (const chunk of streamToAsyncIterable(stream))
     output += decoder.decode(chunk, { stream: true });
   return output;
 }
