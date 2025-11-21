@@ -1,3 +1,4 @@
+import { ReadableStreamLike } from './conversions';
 import { ReadableStreamBlockReader } from './reader';
 
 import {
@@ -263,7 +264,7 @@ function copyUint8Array(src: Uint8Array) {
 
 /** Provide tar entry iterator */
 export async function* untar(
-  stream: ReadableStream
+  stream: ReadableStreamLike<Uint8Array>
 ): AsyncGenerator<TarFile | TarChunk> {
   const gax = initTarHeader(null);
   const reader = new ReadableStreamBlockReader(stream, BLOCK_SIZE);
