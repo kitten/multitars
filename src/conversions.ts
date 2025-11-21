@@ -44,11 +44,6 @@ export function streamLikeToIterator<T>(
   }
 }
 
-export let BOUNDARY_ID = '----formdata-';
-for (let i = 16; i > 0; i--) {
-  BOUNDARY_ID += ((Math.random() * 1e8) | 0).toString(36)[0];
-}
-
 interface SafeIteratorSourceOptions {
   signal?: AbortSignal;
   expectedLength?: number | bigint;

@@ -1,7 +1,6 @@
-import { encodeName } from './multipartEncoding';
+import { encodeName, BOUNDARY_ID } from './multipartEncoding';
 import {
   streamToAsyncIterable,
-  BOUNDARY_ID,
   type ReadableStreamLike,
   streamLikeToIterator,
 } from './conversions';
