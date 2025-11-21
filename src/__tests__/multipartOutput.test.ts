@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { streamMultipart } from '../multipartOutput';
 import { iterableToStream, streamToText } from './utils';
 
-vi.mock('../conversions', async importOriginal => ({
+vi.mock('../multipartEncoding', async importOriginal => ({
   ...(await importOriginal()),
   BOUNDARY_ID: '----formdata-multitars',
 }));
