@@ -1,3 +1,8 @@
+export type ReadableStreamLike<T> =
+  | ReadableStream<T>
+  | AsyncIterable<T>
+  | Iterable<T>;
+
 export function streamToIterator<T>(
   stream: ReadableStream<T>
 ): AsyncIterable<T> {
@@ -12,6 +17,30 @@ export function streamToIterator<T>(
     })();
   } else {
     return stream;
+  }
+}
+
+type IteratorReadResult<T> =
+  | { done: false; value: T }
+  | { done: true; value?: T | undefined };
+
+export type StreamIterator<T> = () => Promise<IteratorReadResult<T>>;
+
+export function streamLikeToIterator<T>(
+  stream: ReadableStreamLike<T>
+): StreamIterator<T> {
+  if ('getReader' in stream && typeof stream.getReader === 'function') {
+    const reader = stream.getReader();
+    return async function read() {
+      return await reader.read();
+    };
+  } else {
+    const iterator = stream[Symbol.asyncIterator]
+      ? stream[Symbol.asyncIterator]()
+      : stream[Symbol.iterator]();
+    return async function next() {
+      return await iterator.next();
+    };
   }
 }
 

@@ -1,6 +1,7 @@
 import { StreamFile } from './file';
 import { ReadableStreamBlockReader, readUntilBoundary } from './reader';
 import { decodeName } from './multipartEncoding';
+import { ReadableStreamLike } from './conversions';
 
 const BLOCK_SIZE = 4_096; /*4KiB*/
 
@@ -220,7 +221,7 @@ interface ParseMultipartParams {
 
 /** Provide tar entry iterator */
 export async function* parseMultipart(
-  stream: ReadableStream,
+  stream: ReadableStreamLike<Uint8Array>,
   params: ParseMultipartParams
 ): AsyncGenerator<StreamFile> {
   const boundary = convertToBoundaryBytes(params.contentType);

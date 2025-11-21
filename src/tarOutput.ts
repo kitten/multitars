@@ -1,4 +1,8 @@
-import { streamToIterator } from './conversions';
+import {
+  type ReadableStreamLike,
+  streamLikeToIterator,
+  streamToIterator,
+} from './conversions';
 
 import {
   BLOCK_SIZE,
@@ -181,9 +185,12 @@ function paxName(name: string) {
 }
 
 export async function* tar(
-  entries: AsyncIterable<TarChunk | TarFile> | Iterable<TarChunk | TarFile>
+  entries: ReadableStreamLike<TarChunk | TarFile>
 ): AsyncGenerator<Uint8Array<ArrayBuffer>> {
-  for await (const entry of entries) {
+  const next = streamLikeToIterator(entries);
+  let result: Awaited<ReturnType<typeof next>>;
+  while (!(result = await next()).done && result.value) {
+    const { value: entry } = result;
     const header = initTarHeader(entry);
     if (!Number.isSafeInteger(header.size) || header.size < 0) {
       throw new Error(

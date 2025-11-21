@@ -1,28 +1,8 @@
-class SerializedReader<T> {
-  pending: Promise<ReadableStreamReadResult<T>> | null;
-  reader: ReadableStreamDefaultReader<T>;
-  constructor(reader: ReadableStreamDefaultReader<T>) {
-    this.reader = reader;
-    this.pending = null;
-  }
-
-  async read(): Promise<ReadableStreamReadResult<T>> {
-    if (this.pending) {
-      return this.pending;
-    }
-    this.pending = this.reader.read();
-    try {
-      return await this.pending;
-    } finally {
-      this.pending = null;
-    }
-  }
-
-  async cancel(reason?: any): Promise<void> {
-    await this.pending;
-    await this.reader.cancel(reason);
-  }
-}
+import {
+  type ReadableStreamLike,
+  StreamIterator,
+  streamLikeToIterator,
+} from './conversions';
 
 /** A reader that can output fixed size pages of underlying byte streams.
  * @remarks
@@ -49,13 +29,13 @@ export class ReadableStreamBlockReader {
 
   // (3) The reader gets data from the underlying ReadableStream. It's wrapped in SerializedReader
   // to prevent concurrent reads from failing. Instead, they'll be shared between calls.
-  private reader: SerializedReader<Uint8Array>;
+  private next: StreamIterator<Uint8Array>;
 
   readonly blockSize: number;
   readonly block: Uint8Array;
 
-  constructor(stream: ReadableStream<Uint8Array>, blockSize: number) {
-    this.reader = new SerializedReader(stream.getReader());
+  constructor(stream: ReadableStreamLike<Uint8Array>, blockSize: number) {
+    this.next = streamLikeToIterator(stream);
     this.blockSize = blockSize;
     this.block = new Uint8Array(blockSize);
     this.nextRead = null;
@@ -107,7 +87,7 @@ export class ReadableStreamBlockReader {
 
     // (3): If `block` isn't filled yet, start filling it with data from the byte stream
     while ((remaining = blockSize - byteLength) > 0) {
-      const { done, value: view } = await this.reader.read();
+      const { done, value: view } = await this.next();
       if (done || !view?.byteLength) {
         break;
       } else if (view.byteLength > remaining) {
@@ -170,7 +150,7 @@ export class ReadableStreamBlockReader {
       }
     }
 
-    const { done, value: view } = await this.reader.read();
+    const { done, value: view } = await this.next();
     if (done) {
       return null;
     } else if (view.byteLength > maxSize) {
@@ -211,7 +191,7 @@ export class ReadableStreamBlockReader {
     }
 
     while (remaining > 0) {
-      const { done, value: view } = await this.reader.read();
+      const { done, value: view } = await this.next();
       if (done) {
         return remaining;
       } else if (view.byteLength > remaining) {
@@ -233,11 +213,6 @@ export class ReadableStreamBlockReader {
       reverseSet(this.buffer, buffer, this.bufferSize);
       this.bufferSize += buffer.byteLength;
     }
-  }
-
-  /** Cancels the underlying stream */
-  cancel(reason?: any): Promise<void> {
-    return this.reader.cancel(reason);
   }
 }
 
