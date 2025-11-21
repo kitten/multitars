@@ -235,10 +235,9 @@ function indexOf(
   const boundaryStartByte = boundary[0];
   let idx = fromIndex;
   while (idx <= bufferEndIdx) {
-    let bufferByte = buffer[idx + boundaryEndIdx];
+    const bufferByte = buffer[idx + boundaryEndIdx];
     if (bufferByte === boundaryLastByte) {
-      bufferByte = buffer[idx];
-      if (bufferByte === boundaryStartByte) {
+      if (buffer[idx] === boundaryStartByte) {
         return idx;
       }
     }
@@ -320,8 +319,6 @@ export async function* readUntilBoundary(
           yield buffer.subarray(0, searchIdx);
           return;
         }
-      } else {
-        searchIdx = bufferIdx;
       }
     }
     // (6): Boundary wasn't found, so emit the full buffer, and search the next one
