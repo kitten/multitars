@@ -1,3 +1,4 @@
+export { streamToAsyncIterable, iterableToStream } from './conversions';
 export { StreamFile, type StreamFileOptions } from './file';
 export { parseMultipart } from './multipartInput';
 export {
