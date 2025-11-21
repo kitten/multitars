@@ -1,6 +1,6 @@
 interface UnderlyingDefaultSource<R = any> {
   /** workerd's marker for ReadableStream byte length */
-  expectedLength?: number;
+  expectedLength?: number | bigint;
 }
 
 interface ReadableStream<R = any> {
