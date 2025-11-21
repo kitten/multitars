@@ -1,5 +1,10 @@
 import { encodeName } from './multipartEncoding';
-import { streamToIterator, BOUNDARY_ID } from './conversions';
+import {
+  streamToIterator,
+  BOUNDARY_ID,
+  type ReadableStreamLike,
+  streamLikeToIterator,
+} from './conversions';
 
 const CRLF = '\r\n';
 const BOUNDARY_HYPHEN_CHARS = '--';
@@ -47,10 +52,14 @@ export type FormEntry = readonly [name: string, value: FormValue];
 export const multipartContentType = `multipart/form-data; boundary=${BOUNDARY_ID}`;
 
 export async function* streamMultipart(
-  entries: AsyncIterable<FormEntry> | Iterable<FormEntry>
+  entries: ReadableStreamLike<FormEntry>
 ): AsyncGenerator<Uint8Array<ArrayBuffer>> {
+  const next = streamLikeToIterator(entries);
   const encoder = new TextEncoder();
-  for await (const [name, value] of entries) {
+  let result: Awaited<ReturnType<typeof next>>;
+  while (!(result = await next()).done && result.value) {
+    const name = result.value[0];
+    const value = result.value[1];
     if (isBlob(value)) {
       yield encoder.encode(
         makeFormHeader(
