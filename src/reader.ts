@@ -241,6 +241,37 @@ export class ReadableStreamBlockReader {
   }
 }
 
+function indexOf(
+  buffer: Uint8Array,
+  boundary: Uint8Array & { _skipTable?: Uint8Array },
+  fromIndex: number
+): number {
+  const boundaryEndIdx = boundary.byteLength - 1;
+  let skipTable: Uint8Array | undefined = boundary._skipTable;
+  if (!skipTable) {
+    skipTable = boundary._skipTable = new Uint8Array(256).fill(
+      boundary.byteLength
+    );
+    for (let idx = 0; idx < boundaryEndIdx; idx++)
+      skipTable[boundary[idx]] = boundaryEndIdx - idx;
+  }
+  const bufferEndIdx = buffer.byteLength - boundary.byteLength;
+  const boundaryLastByte = boundary[boundaryEndIdx];
+  const boundaryStartByte = boundary[0];
+  let idx = fromIndex;
+  while (idx <= bufferEndIdx) {
+    let bufferByte = buffer[idx + boundaryEndIdx];
+    if (bufferByte === boundaryLastByte) {
+      bufferByte = buffer[idx];
+      if (bufferByte === boundaryStartByte) {
+        return idx;
+      }
+    }
+    idx += skipTable[bufferByte];
+  }
+  return buffer.indexOf(boundaryStartByte, idx);
+}
+
 export async function* readUntilBoundary(
   reader: ReadableStreamBlockReader,
   boundary: Uint8Array
@@ -257,7 +288,7 @@ export async function* readUntilBoundary(
   // the boundary successfully:
   //   --x--|x--x\r\n
   // If we only search the first buffer once, we risk missing it due to the repetition.
-  const prevBuffer = new Uint8Array(reader.blockSize);
+  let prevBuffer: Uint8Array | undefined;
   for (
     let buffer = await reader.read(true), nextBuffer: Uint8Array | null = null;
     buffer != null || (buffer = await reader.read(true)) != null;
@@ -265,7 +296,7 @@ export async function* readUntilBoundary(
   ) {
     let searchIdx = -1;
     // (1): Search for the starting boundary character from `searchIdx`
-    while ((searchIdx = buffer.indexOf(boundary[0], searchIdx + 1)) > -1) {
+    while ((searchIdx = indexOf(buffer, boundary, searchIdx + 1)) > -1) {
       // (2): Check if boundary matches (partially) at `searchIdx`
       let bufferIdx = searchIdx + 1;
       let boundaryIdx = 1;
@@ -287,7 +318,9 @@ export async function* readUntilBoundary(
         // (4): Partial boundary was found at the end of `buffer`
         // Get the next buffer and search the rest of the boundary in `nextBuffer`
         if (!nextBuffer) {
-          prevBuffer.set(buffer);
+          (prevBuffer || (prevBuffer = new Uint8Array(reader.blockSize))).set(
+            buffer
+          );
           buffer = prevBuffer.subarray(0, buffer.byteLength);
           nextBuffer = await reader.read(true);
           if (!nextBuffer) {
@@ -312,6 +345,8 @@ export async function* readUntilBoundary(
           yield buffer.subarray(0, searchIdx);
           return;
         }
+      } else {
+        searchIdx = bufferIdx;
       }
     }
     // (6): Boundary wasn't found, so emit the full buffer, and search the next one
