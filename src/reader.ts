@@ -17,11 +17,6 @@ class SerializedReader<T> {
       this.pending = null;
     }
   }
-
-  async cancel(reason?: any): Promise<void> {
-    await this.pending;
-    await this.reader.cancel(reason);
-  }
 }
 
 /** A reader that can output fixed size pages of underlying byte streams.
@@ -233,11 +228,6 @@ export class ReadableStreamBlockReader {
       reverseSet(this.buffer, buffer, this.bufferSize);
       this.bufferSize += buffer.byteLength;
     }
-  }
-
-  /** Cancels the underlying stream */
-  cancel(reason?: any): Promise<void> {
-    return this.reader.cancel(reason);
   }
 }
 
