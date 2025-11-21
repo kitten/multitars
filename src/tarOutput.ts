@@ -1,7 +1,7 @@
 import {
   type ReadableStreamLike,
   streamLikeToIterator,
-  streamToIterator,
+  streamToAsyncIterable,
 } from './conversions';
 
 import {
@@ -241,7 +241,7 @@ export async function* tar(
 
     const stream = entry.stream();
     if (header.size) {
-      yield* streamToIterator(stream);
+      yield* streamToAsyncIterable(stream);
     } else if (!stream.locked) {
       await stream.cancel();
     }

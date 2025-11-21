@@ -1,11 +1,12 @@
-import { streamToIterator } from '../conversions';
+import { streamToAsyncIterable } from '../conversions';
+export { iterableToStream } from '../conversions';
 
 export async function streamToBuffer(
   stream: ReadableStream<Uint8Array>
 ): Promise<Uint8Array<ArrayBuffer>> {
   let byteLength = 0;
   const chunks: Uint8Array[] = [];
-  for await (const chunk of streamToIterator(stream)) {
+  for await (const chunk of streamToAsyncIterable(stream)) {
     byteLength += chunk.byteLength;
     chunks.push(chunk);
   }
@@ -27,38 +28,9 @@ export async function streamToText(
 ): Promise<string> {
   let output = '';
   const decoder = new TextDecoder();
-  for await (const chunk of streamToIterator(stream))
+  for await (const chunk of streamToAsyncIterable(stream))
     output += decoder.decode(chunk, { stream: true });
   return output;
-}
-
-export function iteratorToStream(
-  iterable: AsyncIterable<Uint8Array<ArrayBuffer>>
-): ReadableStream<Uint8Array<ArrayBuffer>> {
-  let iterator: AsyncIterator<Uint8Array<ArrayBuffer>>;
-  return new ReadableStream<Uint8Array<ArrayBuffer>>(
-    {
-      start(_controller) {
-        iterator = iterable[Symbol.asyncIterator]();
-      },
-      async cancel(reason) {
-        await iterator?.return?.(reason);
-      },
-      async pull(controller) {
-        try {
-          const { value, done } = await iterator.next();
-          if (done) {
-            controller.close();
-          } else {
-            controller.enqueue(value);
-          }
-        } catch (error) {
-          controller.error(error);
-        }
-      },
-    },
-    new ByteLengthQueuingStrategy({ highWaterMark: 0 })
-  );
 }
 
 const encoder = new TextEncoder();

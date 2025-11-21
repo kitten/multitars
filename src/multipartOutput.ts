@@ -1,7 +1,6 @@
-import { encodeName } from './multipartEncoding';
+import { encodeName, BOUNDARY_ID } from './multipartEncoding';
 import {
-  streamToIterator,
-  BOUNDARY_ID,
+  streamToAsyncIterable,
   type ReadableStreamLike,
   streamLikeToIterator,
 } from './conversions';
@@ -70,7 +69,7 @@ export async function* streamMultipart(
           }
         )
       );
-      yield* streamToIterator(value.stream());
+      yield* streamToAsyncIterable(value.stream());
     } else {
       yield encoder.encode(makeFormHeader({ name }, undefined));
       yield typeof value === 'string' ? encoder.encode(value) : value;

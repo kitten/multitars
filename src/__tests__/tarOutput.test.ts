@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { tar } from '../tarOutput';
 import { untar } from '../tarInput';
 import { TarFile } from '../tarShared';
-import { iteratorToStream, streamToBuffer } from './utils';
+import { iterableToStream, streamToBuffer } from './utils';
 
 describe('tar', () => {
   describe('tested via untar()', () => {
@@ -20,7 +20,7 @@ describe('tar', () => {
         })()
       );
 
-      const binaryOutput = await streamToBuffer(iteratorToStream(tarStream));
+      const binaryOutput = await streamToBuffer(iterableToStream(tarStream));
       expect(Buffer.from(binaryOutput).toString('hex')).toMatchSnapshot();
 
       const entries: any[] = [];
@@ -59,7 +59,7 @@ describe('tar', () => {
       );
 
       const entries: any[] = [];
-      for await (const entry of untar(iteratorToStream(tarStream))) {
+      for await (const entry of untar(iterableToStream(tarStream))) {
         entries.push({
           name: entry.name,
           size: entry.size,
@@ -93,7 +93,7 @@ describe('tar', () => {
       );
 
       const entries: any[] = [];
-      for await (const entry of untar(iteratorToStream(tarStream))) {
+      for await (const entry of untar(iterableToStream(tarStream))) {
         entries.push({
           name: entry.name,
           size: entry.size,
