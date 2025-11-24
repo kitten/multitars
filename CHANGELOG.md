@@ -1,5 +1,12 @@
 # multitars
 
+## 0.2.0
+
+### Minor Changes
+
+- Allow `parseMultipart` and `streamMultipart` to handle custom headers via a `MultipartPart` abstraction extending `StreamFile`
+  Submitted by [@kitten](https://github.com/kitten) (See [#7](https://github.com/kitten/multitars/pull/7))
+
 ## 0.1.0
 
 ### Minor Changes
