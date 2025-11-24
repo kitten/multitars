@@ -1,4 +1,3 @@
-import { BinaryLike } from 'crypto';
 import { streamToAsyncIterable } from './conversions';
 
 async function streamToBuffer(

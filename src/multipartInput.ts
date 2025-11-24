@@ -1,4 +1,3 @@
-import { StreamFile } from './file';
 import { ReadableStreamBlockReader, readUntilBoundary } from './reader';
 import { decodeName } from './multipartEncoding';
 import { ReadableStreamLike } from './conversions';

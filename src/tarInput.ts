@@ -276,7 +276,7 @@ export async function* untar(
     let consumedTrailer = pad === 0;
     let remaining = header._paxSize || header.size;
     let cancel: () => Promise<void>;
-    const stream = new ReadableStream(
+    const stream = new ReadableStream<Uint8Array<ArrayBuffer>>(
       {
         // NOTE(@kitten): This is needed in Cloudflare to attach the expected size to the stream
         expectedLength: header.size,
