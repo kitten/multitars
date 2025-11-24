@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { streamMultipart } from '../multipartOutput';
 import { iterableToStream, streamToText } from './utils';
+import { MultipartPart } from '../multipartShared';
 
 vi.mock('../multipartEncoding', async importOriginal => ({
   ...(await importOriginal()),
@@ -95,6 +96,29 @@ describe('streamMultipart', () => {
       "------formdata-multitars
       Content-Disposition: form-data; name="newline%0Afi+l en%22am👍e.txt"; filename="newline%0Afi+l en%22am👍e.txt"
       Content-Length: 1
+
+      1
+      ------formdata-multitars--
+
+      "
+    `);
+  });
+
+  it('adds custom header entries', async () => {
+    const data = streamMultipart(
+      (async function* () {
+        const file = new MultipartPart(['1'], '1', {
+          headers: { 'custom-signature': '123' },
+        });
+        yield ['1', file];
+      })()
+    );
+
+    expect(await streamToText(iterableToStream(data))).toMatchInlineSnapshot(`
+      "------formdata-multitars
+      Content-Disposition: form-data; name="1"; filename="1"
+      Content-Type: application/octet-stream
+      custom-signature: 123
 
       1
       ------formdata-multitars--

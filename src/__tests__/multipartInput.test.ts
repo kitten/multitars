@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { parseMultipart } from '../multipartInput';
 import { multipartContentType, streamMultipart } from '../multipartOutput';
 import { iterableToStream } from './utils';
+import { MultipartPart } from '../multipartShared';
 
 function chunk(
   readable: ReadableStream<Uint8Array>
@@ -230,6 +231,37 @@ describe('parseMultipart', () => {
         name: entry.name,
         size: entry.size,
         type: entry.type,
+        text: await entry.text(),
+      });
+    }
+    expect(entries).toMatchSnapshot();
+  });
+
+  it('extracts streamMultipart output with custom headers', async () => {
+    const body = iterableToStream(
+      streamMultipart(
+        (async function* () {
+          yield [
+            'filename-a.txt',
+            new MultipartPart(['1'], '1', {
+              headers: { 'custom-signature': '123' },
+            }),
+          ];
+        })()
+      )
+    );
+
+    const entries: any[] = [];
+    const multipart = parseMultipart(body, {
+      contentType: multipartContentType,
+    });
+    for await (const entry of multipart) {
+      expect(entry.headers['custom-signature']).toBe('123');
+      entries.push({
+        name: entry.name,
+        size: entry.size,
+        type: entry.type,
+        headers: entry.headers,
         text: await entry.text(),
       });
     }

@@ -92,3 +92,19 @@ exports[`parseMultipart > extracts streamMultipart output successfully if the fi
   },
 ]
 `;
+
+exports[`parseMultipart > extracts streamMultipart output with custom headers 1`] = `
+[
+  {
+    "headers": {
+      "content-disposition": "form-data; name="filename-a.txt"; filename="1"",
+      "content-type": "application/octet-stream",
+      "custom-signature": "123",
+    },
+    "name": "1",
+    "size": 0,
+    "text": "1",
+    "type": "application/octet-stream",
+  },
+]
+`;
