@@ -1,7 +1,7 @@
-import { StreamFile } from './file';
 import { ReadableStreamBlockReader, readUntilBoundary } from './reader';
 import { decodeName } from './multipartEncoding';
 import { ReadableStreamLike } from './conversions';
+import { MultipartHeaders, MultipartPart } from './multipartShared';
 
 const BLOCK_SIZE = 4_096; /*4KiB*/
 
@@ -18,20 +18,6 @@ function utf8Encode(
   return typeof content === 'string'
     ? encoder.encode(content)
     : new Uint8Array('buffer' in content ? content.buffer : content);
-}
-
-function toKnownHeader(headerName: string) {
-  const normalized = headerName.toLowerCase().trim();
-  switch (normalized) {
-    case 'content-length':
-      return 'Content-Length';
-    case 'content-type':
-      return 'Content-Type';
-    case 'content-disposition':
-      return 'Content-Disposition';
-    default:
-      return null;
-  }
 }
 
 function parseContentLength(contentLength: string | undefined): number | null {
@@ -144,12 +130,6 @@ async function expectTrailer(
   }
 }
 
-interface MultipartHeaders {
-  'Content-Length'?: string;
-  'Content-Type'?: string;
-  'Content-Disposition'?: string;
-}
-
 async function decodeHeaders(
   reader: ReadableStreamBlockReader
 ): Promise<MultipartHeaders | null> {
@@ -157,7 +137,7 @@ async function decodeHeaders(
   // more strict here. The `stream` option is also omitted below
   let byteLength = 0;
   const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
-  const headers: MultipartHeaders = {};
+  const headers: MultipartHeaders = Object.create(null);
   while (byteLength < MAX_HEADERS_SIZE) {
     let header = '';
     for await (const chunk of readUntilBoundary(reader, CRLF)) {
@@ -184,8 +164,9 @@ async function decodeHeaders(
     if (header) {
       const colonIdx = header.indexOf(':');
       if (colonIdx > -1) {
-        const headerName = toKnownHeader(header.slice(0, colonIdx));
-        if (headerName) headers[headerName] = header.slice(colonIdx + 1).trim();
+        const headerName = header.slice(0, colonIdx).trim().toLowerCase();
+        const headerValue = header.slice(colonIdx + 1).trim();
+        if (headerValue) headers[headerName] = headerValue;
         byteLength += header.length + CRLF.byteLength;
       } else {
         throw new Error(
@@ -223,7 +204,7 @@ interface ParseMultipartParams {
 export async function* parseMultipart(
   stream: ReadableStreamLike<Uint8Array>,
   params: ParseMultipartParams
-): AsyncGenerator<StreamFile> {
+): AsyncGenerator<MultipartPart> {
   const boundary = convertToBoundaryBytes(params.contentType);
   const reader = new ReadableStreamBlockReader(stream, BLOCK_SIZE);
   const streamParams = new ByteLengthQueuingStrategy({ highWaterMark: 0 });
@@ -232,10 +213,10 @@ export async function* parseMultipart(
 
   let headers: MultipartHeaders | null;
   while ((headers = await decodeHeaders(reader))) {
-    const type = headers['Content-Type'];
-    const disposition = parseContentDisposition(headers['Content-Disposition']);
+    const type = headers['content-type'];
+    const disposition = parseContentDisposition(headers['content-disposition']);
     const name = disposition?.filename || disposition?.name;
-    const size = parseContentLength(headers['Content-Length']);
+    const size = parseContentLength(headers['content-length']);
     if (!name) {
       throw new Error(
         'Invalid Multipart Part: Missing Content-Disposition name or filename parameter'
@@ -309,9 +290,10 @@ export async function* parseMultipart(
       );
     }
 
-    yield new StreamFile(stream, name, {
+    yield new MultipartPart(stream, name, {
       type: type ?? undefined,
       size: size ?? undefined,
+      headers,
     });
 
     if (remaining > 0 || !reachedEnd) {
