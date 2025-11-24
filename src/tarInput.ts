@@ -146,8 +146,9 @@ function decodeOctal(bytes: Uint8Array, from: number, to: number): number {
   } else {
     idx = from;
     while (idx < to && (bytes[idx] === 32 || bytes[idx] === 0)) idx++;
-    if (end !== idx) val = parseInt(decodeString(bytes, idx, to), 8);
-    return val == val ? val || 0 : 0;
+    while (idx < to && bytes[idx] >= 48 && bytes[idx] <= 55)
+      val = val * 8 + (bytes[idx++] - 48);
+    return val;
   }
 }
 
