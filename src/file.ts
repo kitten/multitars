@@ -1,3 +1,4 @@
+import { BinaryLike } from 'crypto';
 import { streamToAsyncIterable } from './conversions';
 
 async function streamToBuffer(
@@ -46,12 +47,12 @@ export class StreamFile extends File {
   #name: string;
 
   constructor(
-    stream: ReadableStream<Uint8Array<ArrayBuffer>>,
+    stream: ReadableStream<Uint8Array<ArrayBuffer>> | BlobPart[],
     name: string,
     options: StreamFileOptions
   ) {
     super([], name, options);
-    this.#stream = stream;
+    this.#stream = Array.isArray(stream) ? new Blob(stream).stream() : stream;
     this.#type = options.type ?? 'application/octet-stream';
     this.#lastModified = options.lastModified || 0;
     this.#size = options.size || 0;

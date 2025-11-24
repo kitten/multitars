@@ -102,8 +102,11 @@ export class TarChunk extends StreamFile implements TarChunkHeader {
   devmajor: number;
   devminor: number;
 
-  constructor(data: ReadableStream, header: TarHeader) {
-    super(data, getTarName(header), {
+  constructor(
+    stream: ReadableStream<Uint8Array<ArrayBuffer>> | BlobPart[],
+    header: TarHeader
+  ) {
+    super(stream, getTarName(header), {
       lastModified: 1000 * header.mtime,
       size: getTarSize(header),
     });
@@ -133,18 +136,25 @@ export class TarFile extends StreamFile implements TarChunkHeader {
   devmajor: number;
   devminor: number;
 
-  static from(data: ReadableStream, name: string, options: StreamFileOptions) {
+  static from(
+    stream: ReadableStream<Uint8Array<ArrayBuffer>> | BlobPart[],
+    name: string,
+    options: StreamFileOptions
+  ) {
     const header = initTarHeader(null);
     header.name = name;
     header.mtime = options.lastModified
       ? Math.floor(options.lastModified / 1000)
       : 0;
     header.size = options.size || 0;
-    return new TarFile(data, header);
+    return new TarFile(stream, header);
   }
 
-  constructor(data: ReadableStream, header: TarHeader) {
-    super(data, getTarName(header), {
+  constructor(
+    stream: ReadableStream<Uint8Array<ArrayBuffer>> | BlobPart[],
+    header: TarHeader
+  ) {
+    super(stream, getTarName(header), {
       lastModified: 1000 * header.mtime,
       size: getTarSize(header),
     });

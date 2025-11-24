@@ -15,11 +15,11 @@ export class MultipartPart extends StreamFile {
   headers: MultipartHeaders;
 
   constructor(
-    data: ReadableStream,
+    stream: ReadableStream<Uint8Array<ArrayBuffer>> | BlobPart[],
     name: string,
     options?: MultipartPartOptions
   ) {
-    super(data, name, options ?? {});
+    super(stream, name, options ?? {});
     this.headers = options?.headers || Object.create(null);
     if (options?.size) {
       this.headers['content-length'] = `${options.size}`;
