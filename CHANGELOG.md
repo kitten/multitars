@@ -1,5 +1,12 @@
 # multitars
 
+## 0.2.1
+
+### Patch Changes
+
+- Replace `parseInt(val, 8)` for octal parsing with manual parsing (hotpath)
+  Submitted by [@kitten](https://github.com/kitten) (See [#9](https://github.com/kitten/multitars/pull/9))
+
 ## 0.2.0
 
 ### Minor Changes
