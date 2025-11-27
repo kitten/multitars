@@ -61,15 +61,14 @@ export class ReadableStreamBlockReader {
     if (this.input != null && remaining > 0) {
       if (this.input.byteLength - this.inputOffset > remaining) {
         // Optimization: We can return immediately if we have enough data
-        this.blockLocked = true;
-        block.set(
-          this.input.subarray(
-            this.inputOffset,
-            (this.inputOffset += remaining)
-          ),
-          byteLength
+        // Optimization: If `block` is still empty, we can just return the slice directly
+        const slice = this.input.subarray(
+          this.inputOffset,
+          (this.inputOffset += remaining)
         );
-        return block;
+        return (this.blockLocked = byteLength !== 0)
+          ? (block.set(slice, byteLength), block)
+          : slice;
       } else {
         // We copy partially from input, since the input is exhausted
         const slice = this.input.subarray(this.inputOffset);
