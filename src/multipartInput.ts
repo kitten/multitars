@@ -136,15 +136,10 @@ async function expectTrailer(
   reader: ReadableStreamBlockReader,
   boundary: Boundary
 ): Promise<void> {
-  for await (const chunk of readUntilBoundary(
-    reader,
-    boundary.trailer,
-    boundary.trailerSkipTable
-  )) {
-    if (chunk == null || chunk.byteLength !== 0) {
+  const chunk = await reader.pull(boundary.trailer.byteLength);
+  for (let idx = 0; idx < boundary.trailer.byteLength; idx++) {
+    if (chunk == null || chunk[idx] !== boundary.trailer[idx]) {
       throw new Error('Invalid Multipart Part: Expected trailing boundary');
-    } else {
-      break;
     }
   }
 }
