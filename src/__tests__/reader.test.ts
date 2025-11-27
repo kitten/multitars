@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { ReadableStreamBlockReader, readUntilBoundary } from '../reader';
+import {
+  bytesToSkipTable,
+  ReadableStreamBlockReader,
+  readUntilBoundary,
+} from '../reader';
 import {
   utf8Encode,
   iterableToStream,
@@ -249,9 +253,11 @@ describe(readUntilBoundary, () => {
     await expect(async () => {
       const stream = iterableToStream(streamText('', 1));
       const reader = new ReadableStreamBlockReader(stream, 4);
+      const boundary = utf8Encode(BOUNDARY);
       for await (const _chunk of readUntilBoundary(
         reader,
-        utf8Encode(BOUNDARY)
+        boundary,
+        bytesToSkipTable(boundary)
       )) {
         // noop
       }
@@ -267,7 +273,12 @@ describe(readUntilBoundary, () => {
     // Reads data until a boundary across two chunks
     let output = '';
     const decoder = new TextDecoder();
-    for await (const chunk of readUntilBoundary(reader, utf8Encode(BOUNDARY))) {
+    const boundary = utf8Encode(BOUNDARY);
+    for await (const chunk of readUntilBoundary(
+      reader,
+      boundary,
+      bytesToSkipTable(boundary)
+    )) {
       expect(chunk).not.toBe(null);
       output += decoder.decode(chunk!);
     }
@@ -292,7 +303,12 @@ describe(readUntilBoundary, () => {
     // Reads data until a boundary across two chunks
     let output = '';
     const decoder = new TextDecoder();
-    for await (const chunk of readUntilBoundary(reader, utf8Encode(BOUNDARY))) {
+    const boundary = utf8Encode(BOUNDARY);
+    for await (const chunk of readUntilBoundary(
+      reader,
+      boundary,
+      bytesToSkipTable(boundary)
+    )) {
       expect(chunk).not.toBe(null);
       output += decoder.decode(chunk!);
     }
@@ -310,8 +326,13 @@ describe(readUntilBoundary, () => {
       streamText(BOUNDARY + 'test', BOUNDARY.length)
     );
     const reader = new ReadableStreamBlockReader(stream, BOUNDARY.length);
+    const boundary = utf8Encode(BOUNDARY);
     let chunks = 0;
-    for await (const chunk of readUntilBoundary(reader, utf8Encode(BOUNDARY))) {
+    for await (const chunk of readUntilBoundary(
+      reader,
+      boundary,
+      bytesToSkipTable(boundary)
+    )) {
       expect(chunk).toEqual(new Uint8Array([]));
       chunks++;
     }
@@ -322,8 +343,13 @@ describe(readUntilBoundary, () => {
   it('aborts with null yield for EOF', async () => {
     const stream = iterableToStream(streamText('some longer string', 4));
     const reader = new ReadableStreamBlockReader(stream, 12);
+    const boundary = utf8Encode(BOUNDARY);
     const chunks: (Uint8Array | null)[] = [];
-    for await (const chunk of readUntilBoundary(reader, utf8Encode(BOUNDARY))) {
+    for await (const chunk of readUntilBoundary(
+      reader,
+      boundary,
+      bytesToSkipTable(boundary)
+    )) {
       if (chunk) {
         const copy = new Uint8Array(chunk.byteLength);
         copy.set(chunk);
@@ -366,8 +392,13 @@ describe(readUntilBoundary, () => {
       streamText(`some longer string${BOUNDARY.slice(0, 4)}`, 4)
     );
     const reader = new ReadableStreamBlockReader(stream, 12);
+    const boundary = utf8Encode(BOUNDARY);
     const chunks: (Uint8Array | null)[] = [];
-    for await (const chunk of readUntilBoundary(reader, utf8Encode(BOUNDARY))) {
+    for await (const chunk of readUntilBoundary(
+      reader,
+      boundary,
+      bytesToSkipTable(boundary)
+    )) {
       if (chunk) {
         const copy = new Uint8Array(chunk.byteLength);
         copy.set(chunk);
@@ -417,10 +448,15 @@ describe(readUntilBoundary, () => {
         streamText(`${before}${BOUNDARY}${after}`, 4)
       );
       const reader = new ReadableStreamBlockReader(stream, 12);
+      const boundary = utf8Encode(BOUNDARY);
       // Reads data until a boundary across two chunks
       let actual = '';
       const decoder = new TextDecoder();
-      for await (const chunk of readUntilBoundary(reader, utf8Encode(BOUNDARY)))
+      for await (const chunk of readUntilBoundary(
+        reader,
+        boundary,
+        bytesToSkipTable(boundary)
+      ))
         actual += decoder.decode(chunk!);
       expect(actual).toBe(before);
 

@@ -222,20 +222,20 @@ export class ReadableStreamBlockReader {
   }
 }
 
+export function bytesToSkipTable(bytes: Uint8Array): Uint8Array {
+  const skipTable = new Uint8Array(256).fill(bytes.byteLength);
+  const endIdx = bytes.byteLength - 1;
+  for (let idx = 0; idx < endIdx; idx++) skipTable[bytes[idx]] = endIdx - idx;
+  return skipTable;
+}
+
 function indexOf(
   buffer: Uint8Array,
-  boundary: Uint8Array & { _skipTable?: Uint8Array },
-  fromIndex: number
+  boundary: Uint8Array,
+  fromIndex: number,
+  skipTable: Uint8Array
 ): number {
   const boundaryEndIdx = boundary.byteLength - 1;
-  let skipTable: Uint8Array | undefined = boundary._skipTable;
-  if (!skipTable) {
-    skipTable = boundary._skipTable = new Uint8Array(256).fill(
-      boundary.byteLength
-    );
-    for (let idx = 0; idx < boundaryEndIdx; idx++)
-      skipTable[boundary[idx]] = boundaryEndIdx - idx;
-  }
   const bufferEndIdx = buffer.byteLength - boundary.byteLength;
   const boundaryLastByte = boundary[boundaryEndIdx];
   const boundaryStartByte = boundary[0];
@@ -254,7 +254,8 @@ function indexOf(
 
 export async function* readUntilBoundary(
   reader: ReadableStreamBlockReader,
-  boundary: Uint8Array
+  boundary: Uint8Array,
+  skipTable: Uint8Array
 ): AsyncGenerator<Uint8Array | null> {
   if (boundary.byteLength > reader.blockSize) {
     throw new TypeError(
@@ -275,7 +276,9 @@ export async function* readUntilBoundary(
   ) {
     let searchIdx = -1;
     // (1): Search for the starting boundary character from `searchIdx`
-    while ((searchIdx = indexOf(buffer, boundary, searchIdx + 1)) > -1) {
+    while (
+      (searchIdx = indexOf(buffer, boundary, searchIdx + 1, skipTable)) > -1
+    ) {
       // (2): Check if boundary matches (partially) at `searchIdx`
       let bufferIdx = searchIdx + 1;
       let boundaryIdx = 1;
