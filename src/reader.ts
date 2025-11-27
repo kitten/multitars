@@ -26,6 +26,8 @@ export class ReadableStreamBlockReader {
   blockSize: number;
   block: Uint8Array;
 
+  buffer: ArrayBuffer | null;
+
   constructor(stream: ReadableStreamLike<Uint8Array>, blockSize: number) {
     this.next = streamLikeToIterator(stream);
     this.input = null;
@@ -34,6 +36,7 @@ export class ReadableStreamBlockReader {
     this.blockRewind = 0;
     this.blockSize = blockSize;
     this.block = new Uint8Array(blockSize);
+    this.buffer = null;
   }
 
   /** Outputs the next block of `Uint8Array` data.
@@ -210,6 +213,13 @@ export class ReadableStreamBlockReader {
       this.inputOffset -= shiftEnd;
     }
   }
+
+  copy(block: Uint8Array): Uint8Array {
+    this.buffer ||= new ArrayBuffer(this.blockSize);
+    const copy = new Uint8Array(this.buffer, 0, block.byteLength);
+    copy.set(block);
+    return copy;
+  }
 }
 
 function indexOf(
@@ -258,7 +268,6 @@ export async function* readUntilBoundary(
   // the boundary successfully:
   //   --x--|x--x\r\n
   // If we only search the first buffer once, we risk missing it due to the repetition.
-  let prevBuffer: Uint8Array | undefined;
   for (
     let buffer = await reader.read(), nextBuffer: Uint8Array | null = null;
     buffer != null || (buffer = await reader.read()) != null;
@@ -288,10 +297,8 @@ export async function* readUntilBoundary(
         // (4): Partial boundary was found at the end of `buffer`
         // Get the next buffer and search the rest of the boundary in `nextBuffer`
         if (!nextBuffer) {
-          (prevBuffer || (prevBuffer = new Uint8Array(reader.blockSize))).set(
-            buffer
-          );
-          buffer = prevBuffer.subarray(0, buffer.byteLength);
+          // Copy last buffer before moving on
+          buffer = reader.copy(buffer);
           nextBuffer = await reader.read();
           if (!nextBuffer) {
             // WARN(@kitten): This means we ran out of chunks unexpectedly (EOF) while searching for a boundary
