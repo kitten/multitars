@@ -1,5 +1,16 @@
 # multitars
 
+## 0.2.2
+
+### Patch Changes
+
+- Drop block scoping transform which interferred with generator
+  Submitted by [@kitten](https://github.com/kitten) (See [#13](https://github.com/kitten/multitars/pull/13))
+- Reduce `ReadableStreamBlockReader` memory complexity
+  Submitted by [@kitten](https://github.com/kitten) (See [#11](https://github.com/kitten/multitars/pull/11))
+- Skip `File` constructor to improve performance
+  Submitted by [@kitten](https://github.com/kitten) (See [#12](https://github.com/kitten/multitars/pull/12))
+
 ## 0.2.1
 
 ### Patch Changes
