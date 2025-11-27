@@ -225,7 +225,6 @@ export default [
         presets: [],
         plugins: [
           '@babel/plugin-transform-typescript',
-          '@babel/plugin-transform-block-scoping',
         ],
       }),
     ],
