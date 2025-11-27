@@ -38,7 +38,13 @@ export interface StreamFileOptions {
   size?: number;
 }
 
-export class StreamFile extends File {
+// NOTE: Instantiating a `File` isn't free, but we can skip it entirely since we implement
+// the entire interface of `File` with a manual prototype class
+function _File() {}
+_File.prototype = Object.create(File.prototype);
+const fileClass = (): typeof File => _File as any;
+
+export class StreamFile extends fileClass() implements File {
   #stream: ReadableStream<Uint8Array<ArrayBuffer>>;
   #lastModified: number;
   #size: number;
