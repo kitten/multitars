@@ -25,7 +25,8 @@ export class ReadableStreamBlockReader {
   // (2) This is a pointer to a chunk of bytes. When a call to reader.read() returned "too much"
   // data (e.g. beyond .pull(maxSize) or beyond .read()'s blockSize, then nextRead is set
   // to the remaining data.
-  private nextRead: Uint8Array | null;
+  private input: Uint8Array | null;
+  private inputOffset: number;
 
   // (3) The reader gets data from the underlying ReadableStream. It's wrapped in SerializedReader
   // to prevent concurrent reads from failing. Instead, they'll be shared between calls.
@@ -38,7 +39,8 @@ export class ReadableStreamBlockReader {
     this.next = streamLikeToIterator(stream);
     this.blockSize = blockSize;
     this.block = new Uint8Array(blockSize);
-    this.nextRead = null;
+    this.input = null;
+    this.inputOffset = 0;
     this.buffer = new Uint8Array(blockSize);
     this.bufferSize = 0;
   }
@@ -72,16 +74,19 @@ export class ReadableStreamBlockReader {
     }
 
     let remaining = blockSize - byteLength;
-    if (remaining > 0 && this.nextRead != null) {
-      if (this.nextRead.byteLength > remaining) {
-        // Optimization: Return early if block is filled with nextRead
-        block.set(this.nextRead.subarray(0, remaining), byteLength);
-        this.nextRead = this.nextRead.subarray(remaining);
+    if (this.input != null && remaining > 0) {
+      if (this.input.byteLength - this.inputOffset > remaining) {
+        const slice = this.input.subarray(
+          this.inputOffset,
+          (this.inputOffset += remaining)
+        );
+        block.set(slice, byteLength);
         return block;
       } else {
-        block.set(this.nextRead, byteLength);
-        byteLength += this.nextRead.byteLength;
-        this.nextRead = null;
+        const slice = this.input.subarray(this.inputOffset);
+        block.set(slice, byteLength);
+        byteLength += slice.byteLength;
+        this.input = null;
       }
     }
 
@@ -91,14 +96,10 @@ export class ReadableStreamBlockReader {
       if (done || !view?.byteLength) {
         break;
       } else if (view.byteLength > remaining) {
-        this.nextRead = view.subarray(remaining);
-        if (byteLength === 0) {
-          // Optimization: If `block` is still empty, we can just return this buffer directly
-          return view.subarray(0, remaining);
-        } else {
-          block.set(view.subarray(0, remaining), byteLength);
-          return block;
-        }
+        this.input = view;
+        const slice = this.input.subarray(0, (this.inputOffset = remaining));
+        // Optimization: If `block` is still empty, we can just return the slice directly
+        return byteLength !== 0 ? (block.set(slice, byteLength), block) : slice;
       } else {
         block.set(view, byteLength);
         byteLength += view.byteLength;
@@ -136,15 +137,17 @@ export class ReadableStreamBlockReader {
         this.bufferSize -= maxSize;
         return output;
       }
-    } else if (this.nextRead != null) {
-      if (this.nextRead.byteLength <= maxSize) {
-        const output = this.nextRead;
-        this.nextRead = null;
-        return output;
+    } else if (this.input != null) {
+      const inputSize = this.input.byteLength - this.inputOffset;
+      if (inputSize <= maxSize) {
+        const slice = this.input.subarray(this.inputOffset);
+        this.input = null;
+        return slice;
       } else {
-        const output = this.nextRead.subarray(0, maxSize);
-        this.nextRead = this.nextRead.subarray(maxSize);
-        return output;
+        return this.input.subarray(
+          this.inputOffset,
+          (this.inputOffset += maxSize)
+        );
       }
     }
 
@@ -152,8 +155,8 @@ export class ReadableStreamBlockReader {
     if (done) {
       return null;
     } else if (view.byteLength > maxSize) {
-      this.nextRead = view.subarray(maxSize);
-      return view.subarray(0, maxSize);
+      this.input = view;
+      return view.subarray(0, (this.inputOffset = maxSize));
     } else {
       return view;
     }
@@ -178,13 +181,13 @@ export class ReadableStreamBlockReader {
       this.bufferSize = 0;
     }
 
-    if (this.nextRead != null) {
-      if (this.nextRead.byteLength > remaining) {
-        this.nextRead = this.nextRead.subarray(remaining);
+    if (this.input != null) {
+      if (this.input.byteLength - this.inputOffset > remaining) {
+        this.inputOffset += remaining;
         return 0;
       } else {
-        remaining -= this.nextRead.byteLength;
-        this.nextRead = null;
+        remaining -= this.input.byteLength - this.inputOffset;
+        this.input = null;
       }
     }
 
@@ -193,7 +196,8 @@ export class ReadableStreamBlockReader {
       if (done) {
         return remaining;
       } else if (view.byteLength > remaining) {
-        this.nextRead = view.subarray(remaining);
+        this.input = view;
+        this.inputOffset = remaining;
         return 0;
       } else {
         remaining -= view.byteLength;
