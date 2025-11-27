@@ -24,7 +24,7 @@ async function decodePax(
   let pax = '';
   while (remaining > 0) {
     let block = await reader.read();
-    if (!block)
+    if (!block || block.byteLength !== reader.blockSize)
       throw new Error('Invalid Tar: Unexpected EOF while parsing PAX data');
     remaining -= block.byteLength;
     if (remaining < 0) block = block.subarray(0, remaining);
@@ -111,7 +111,7 @@ async function decodeLongString(
   let endIndex = -1;
   while (remaining > 0) {
     let block = await reader.read();
-    if (!block)
+    if (!block || block.byteLength !== reader.blockSize)
       throw new Error('Invalid Tar: Unexpected EOF while parsing long string');
     if (endIndex === -1) {
       // We fundamentally don't trust that the length is accurate, and we cut off
@@ -207,6 +207,9 @@ async function decodeHeader(
   let buffer: Uint8Array | null;
   let header = initTarHeader(gax);
   while ((buffer = await reader.read()) && checkMagic(buffer)) {
+    if (buffer.byteLength !== reader.blockSize) {
+      throw new Error('Invalid Tar: Unexpected EOF while reading header');
+    }
     switch (getTypeFlag(buffer)) {
       case InternalTypeFlag.LONG_NAME:
       case InternalTypeFlag.OLD_LONG_NAME:

@@ -48,9 +48,7 @@ describe(ReadableStreamBlockReader, () => {
     await expect(reader.read()).resolves.toEqual(
       new Uint8Array([8, 9, 10, 11])
     );
-    await expect(reader.read()).resolves.toEqual(null);
-    await expect(reader.pull()).resolves.toEqual(new Uint8Array([12, 13, 14]));
-    await expect(reader.pull()).resolves.toEqual(null);
+    await expect(reader.read()).resolves.toEqual(new Uint8Array([12, 13, 14]));
   });
 
   it('allows block-wise reads from a byte stream emitting oversized chunks (even)', async () => {
@@ -73,9 +71,8 @@ describe(ReadableStreamBlockReader, () => {
     const reader = new ReadableStreamBlockReader(stream, 3);
     await expect(reader.read()).resolves.toEqual(new Uint8Array([0, 1, 2]));
     await expect(reader.read()).resolves.toEqual(new Uint8Array([3, 4, 5]));
+    await expect(reader.read()).resolves.toEqual(new Uint8Array([6, 7]));
     await expect(reader.read()).resolves.toEqual(null);
-    await expect(reader.pull()).resolves.toEqual(new Uint8Array([6, 7]));
-    await expect(reader.pull()).resolves.toEqual(null);
   });
 
   it('allows block-wise reads from a byte stream emitting multiply-oversized chunks (even)', async () => {
@@ -92,15 +89,15 @@ describe(ReadableStreamBlockReader, () => {
     await expect(reader.pull()).resolves.toEqual(null);
   });
 
-  it('allows partial final blocks to be returned when `true` is passed to read()', async () => {
+  it('allows partial final blocks to be returned', async () => {
     const stream = iterableToStream(
       streamChunks({ numChunks: 2, chunkSize: 4 })
     );
     const reader = new ReadableStreamBlockReader(stream, 3);
-    await expect(reader.read(true)).resolves.toEqual(new Uint8Array([0, 1, 2]));
-    await expect(reader.read(true)).resolves.toEqual(new Uint8Array([3, 4, 5]));
-    await expect(reader.read(true)).resolves.toEqual(new Uint8Array([6, 7]));
-    await expect(reader.read(true)).resolves.toEqual(null);
+    await expect(reader.read()).resolves.toEqual(new Uint8Array([0, 1, 2]));
+    await expect(reader.read()).resolves.toEqual(new Uint8Array([3, 4, 5]));
+    await expect(reader.read()).resolves.toEqual(new Uint8Array([6, 7]));
+    await expect(reader.read()).resolves.toEqual(null);
   });
 
   it('allows block-wise reads from a byte stream emitting multiply-oversized chunks (uneven)', async () => {
@@ -110,8 +107,7 @@ describe(ReadableStreamBlockReader, () => {
     const reader = new ReadableStreamBlockReader(stream, 2);
     await expect(reader.read()).resolves.toEqual(new Uint8Array([0, 1]));
     await expect(reader.read()).resolves.toEqual(new Uint8Array([2, 3]));
-    await expect(reader.read()).resolves.toEqual(null);
-    await expect(reader.pull()).resolves.toEqual(new Uint8Array([4]));
+    await expect(reader.read()).resolves.toEqual(new Uint8Array([4]));
   });
 
   it('allows block-wise reads from a byte stream emitting multiply-oversized chunks (single)', async () => {
@@ -121,8 +117,8 @@ describe(ReadableStreamBlockReader, () => {
     const reader = new ReadableStreamBlockReader(stream, 4);
     await expect(reader.read()).resolves.toEqual(new Uint8Array([0, 1, 2, 3]));
     await expect(reader.read()).resolves.toEqual(new Uint8Array([4, 5, 6, 7]));
+    await expect(reader.read()).resolves.toEqual(new Uint8Array([8, 9]));
     await expect(reader.read()).resolves.toEqual(null);
-    await expect(reader.pull()).resolves.toEqual(new Uint8Array([8, 9]));
   });
 
   it('allows skipping bytes for undersized chunks at end of blocks', async () => {
@@ -132,8 +128,7 @@ describe(ReadableStreamBlockReader, () => {
     const reader = new ReadableStreamBlockReader(stream, 4);
     await expect(reader.read()).resolves.toEqual(new Uint8Array([0, 1, 2, 3]));
     await expect(reader.skip(2)).resolves.toBe(0);
-    await expect(reader.read()).resolves.toEqual(null);
-    await expect(reader.pull()).resolves.toEqual(new Uint8Array([6, 7]));
+    await expect(reader.read()).resolves.toEqual(new Uint8Array([6, 7]));
   });
 
   it('allows skipping bytes for undersized chunks at beginning of blocks', async () => {
@@ -143,8 +138,7 @@ describe(ReadableStreamBlockReader, () => {
     const reader = new ReadableStreamBlockReader(stream, 4);
     await expect(reader.skip(2)).resolves.toBe(0);
     await expect(reader.read()).resolves.toEqual(new Uint8Array([2, 3, 4, 5]));
-    await expect(reader.read()).resolves.toEqual(null);
-    await expect(reader.pull()).resolves.toEqual(new Uint8Array([6, 7]));
+    await expect(reader.read()).resolves.toEqual(new Uint8Array([6, 7]));
   });
 
   it('allows skipping bytes for oversized chunks at end of blocks', async () => {

@@ -31,8 +31,8 @@ export class ReadableStreamBlockReader {
   // to prevent concurrent reads from failing. Instead, they'll be shared between calls.
   private next: StreamIterator<Uint8Array>;
 
-  private blockSize: number;
-  private block: Uint8Array;
+  blockSize: number;
+  block: Uint8Array;
 
   constructor(stream: ReadableStreamLike<Uint8Array>, blockSize: number) {
     this.next = streamLikeToIterator(stream);
@@ -54,7 +54,7 @@ export class ReadableStreamBlockReader {
    * Call `pull()` to get the remaining buffer if this method returns
    * `null` but the data after the block is important.
    */
-  async read(allowPartialEnd?: boolean): Promise<Uint8Array | null> {
+  async read(): Promise<Uint8Array | null> {
     const { blockSize, block } = this;
 
     // (1): We can skip copying if the current buffer is exactly one block
@@ -105,14 +105,12 @@ export class ReadableStreamBlockReader {
       }
     }
 
-    if (byteLength < blockSize && allowPartialEnd) {
-      return byteLength > 0 ? block.subarray(0, byteLength) : null;
-    } else if (byteLength < blockSize) {
-      // (4) Failure case: If we can't fill the block, push back remaining bytes
-      this.pushback(block.subarray(0, byteLength));
-      return null;
-    } else {
+    if (byteLength === blockSize) {
       return block;
+    } else if (byteLength > 0) {
+      return block.subarray(0, byteLength);
+    } else {
+      return null;
     }
   }
 
@@ -264,8 +262,8 @@ export async function* readUntilBoundary(
   // If we only search the first buffer once, we risk missing it due to the repetition.
   let prevBuffer: Uint8Array | undefined;
   for (
-    let buffer = await reader.read(true), nextBuffer: Uint8Array | null = null;
-    buffer != null || (buffer = await reader.read(true)) != null;
+    let buffer = await reader.read(), nextBuffer: Uint8Array | null = null;
+    buffer != null || (buffer = await reader.read()) != null;
     nextBuffer = null
   ) {
     let searchIdx = -1;
@@ -296,7 +294,7 @@ export async function* readUntilBoundary(
             buffer
           );
           buffer = prevBuffer.subarray(0, buffer.byteLength);
-          nextBuffer = await reader.read(true);
+          nextBuffer = await reader.read();
           if (!nextBuffer) {
             // WARN(@kitten): This means we ran out of chunks unexpectedly (EOF) while searching for a boundary
             yield null;
