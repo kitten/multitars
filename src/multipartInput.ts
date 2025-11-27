@@ -188,13 +188,6 @@ async function decodeHeaders(
   return headers;
 }
 
-// NOTE(@kitten): We don't really want to copy but something isn't applying backpressure correctly
-function copyUint8Array(src: Uint8Array) {
-  const dst = new Uint8Array(src.byteLength);
-  dst.set(src);
-  return dst;
-}
-
 interface ParseMultipartParams {
   /** The `Content-Type` header value */
   contentType: string;
@@ -250,7 +243,7 @@ export async function* parseMultipart(
               if (!buffer)
                 throw new Error('Invalid Multipart Part: Unexpected EOF');
               remaining -= buffer.byteLength;
-              controller.enqueue(copyUint8Array(buffer));
+              controller.enqueue(buffer.slice());
             }
             if (!remaining) {
               await expectTrailer(reader, boundary);
@@ -282,7 +275,7 @@ export async function* parseMultipart(
             } else if (!result.value) {
               throw new Error('Invalid Multipart Part: Unexpected EOF');
             } else {
-              controller.enqueue(copyUint8Array(result.value));
+              controller.enqueue(result.value.slice());
             }
           },
         },

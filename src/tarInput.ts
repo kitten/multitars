@@ -259,13 +259,6 @@ async function decodeHeader(
   return undefined;
 }
 
-// NOTE(@kitten): We don't really want to copy but something isn't applying backpressure correctly
-function copyUint8Array(src: Uint8Array) {
-  const dst = new Uint8Array(src.byteLength);
-  dst.set(src);
-  return dst;
-}
-
 /** Provide tar entry iterator */
 export async function* untar(
   stream: ReadableStreamLike<Uint8Array>
@@ -300,7 +293,7 @@ export async function* untar(
             const buffer = await reader.pull(remaining);
             if (!buffer) throw new Error('Invalid Tar: Unexpected EOF');
             remaining -= buffer.byteLength;
-            controller.enqueue(copyUint8Array(buffer));
+            controller.enqueue(buffer.slice());
           }
           if (!remaining) {
             if (!consumedTrailer) {
