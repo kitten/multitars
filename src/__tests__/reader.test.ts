@@ -217,32 +217,28 @@ describe(ReadableStreamBlockReader, () => {
     await expect(reader.pull()).resolves.toEqual(null);
   });
 
-  it('respects pushed back buffers', async () => {
+  it('respects rewound data in the middle of a chunk', async () => {
     const stream = iterableToStream(
       streamChunks({ numChunks: 1, chunkSize: 8 })
     );
     const reader = new ReadableStreamBlockReader(stream, 4);
-    let chunk: Uint8Array | null;
-    expect((chunk = await reader.read())).toEqual(new Uint8Array([0, 1, 2, 3]));
-    reader.pushback(chunk!);
-    await expect(reader.read()).resolves.toEqual(chunk);
-    await expect(reader.read()).resolves.toEqual(new Uint8Array([4, 5, 6, 7]));
+    expect(await reader.read()).toEqual(new Uint8Array([0, 1, 2, 3]));
+    reader.rewind(2);
+    await expect(reader.read()).resolves.toEqual(new Uint8Array([2, 3, 4, 5]));
+    await expect(reader.read()).resolves.toEqual(new Uint8Array([6, 7]));
     await expect(reader.read()).resolves.toEqual(null);
-    await expect(reader.pull()).resolves.toEqual(null);
   });
 
-  it('combines pushed back buffers with other buffers', async () => {
+  it('respects rewound data in a buffered block', async () => {
     const stream = iterableToStream(
-      streamChunks({ numChunks: 1, chunkSize: 8 })
+      streamChunks({ numChunks: 4, chunkSize: 2 })
     );
     const reader = new ReadableStreamBlockReader(stream, 4);
-    let chunk: Uint8Array | null;
-    expect((chunk = await reader.read())).toEqual(new Uint8Array([0, 1, 2, 3]));
-    reader.pushback(new Uint8Array([1, 2, 3]));
-    reader.pushback(new Uint8Array([0]));
-    await expect(reader.read()).resolves.toEqual(chunk);
-    await expect(reader.read()).resolves.toEqual(new Uint8Array([4, 5, 6, 7]));
-    await expect(reader.pull()).resolves.toEqual(null);
+    expect(await reader.read()).toEqual(new Uint8Array([0, 1, 2, 3]));
+    reader.rewind(2);
+    await expect(reader.read()).resolves.toEqual(new Uint8Array([2, 3, 4, 5]));
+    await expect(reader.read()).resolves.toEqual(new Uint8Array([6, 7]));
+    await expect(reader.read()).resolves.toEqual(null);
   });
 });
 

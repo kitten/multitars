@@ -12,77 +12,63 @@ import {
  */
 export class ReadableStreamBlockReader {
   // The block-wise reader has three sets of byte sources from which it'll read in order:
-  // 1. this.buffer
-  // 2. this.nextRead
-  // 3. this.reader
+  // 1. this.blockRewind -> read from the prior block's output (like a tape rewinder)
+  // 2. this.input -> read from the last chunk the underlying source has emitted
+  // 3. this.next -> get the next chunk from the underlying source
 
-  // (1) This buffer is filled using this.pushback(). This is used when data is "put back"
-  // onto ReadableStreamBlockReader, for example, when we "peek" at data but want a future
-  // read call to see it again. This buffer is filled in reverse.
-  private buffer: Uint8Array;
-  private bufferSize: number;
+  next: StreamIterator<Uint8Array>;
 
-  // (2) This is a pointer to a chunk of bytes. When a call to reader.read() returned "too much"
-  // data (e.g. beyond .pull(maxSize) or beyond .read()'s blockSize, then nextRead is set
-  // to the remaining data.
-  private input: Uint8Array | null;
-  private inputOffset: number;
+  input: Uint8Array | null;
+  inputOffset: number;
 
-  // (3) The reader gets data from the underlying ReadableStream. It's wrapped in SerializedReader
-  // to prevent concurrent reads from failing. Instead, they'll be shared between calls.
-  private next: StreamIterator<Uint8Array>;
-
+  blockLocked: boolean;
+  blockRewind: number;
   blockSize: number;
   block: Uint8Array;
 
   constructor(stream: ReadableStreamLike<Uint8Array>, blockSize: number) {
     this.next = streamLikeToIterator(stream);
-    this.blockSize = blockSize;
-    this.block = new Uint8Array(blockSize);
     this.input = null;
     this.inputOffset = 0;
-    this.buffer = new Uint8Array(blockSize);
-    this.bufferSize = 0;
+    this.blockLocked = false;
+    this.blockRewind = 0;
+    this.blockSize = blockSize;
+    this.block = new Uint8Array(blockSize);
   }
 
-  /** Outputs a `Uint8Array` buffer of the specified block size.
-   * @param allowPartialEnd - When true, allows an undersized final chunk to be returned
+  /** Outputs the next block of `Uint8Array` data.
    * @remarks
    * Resolves a `Uint8Array` block of `blockSize` length, but will
-   * return `null` if the stream is exhausted and no block of the
-   * given size could be retrieved. When this method is called, the
-   * block is consumed, and a subsequent method will consume data
-   * after this block instead.
-   * Call `pull()` to get the remaining buffer if this method returns
-   * `null` but the data after the block is important.
+   * return `null` if the stream is exhausted. It may return a partial
+   * block at the end of the stream.
    */
   async read(): Promise<Uint8Array | null> {
     const { blockSize, block } = this;
 
-    // (1): We can skip copying if the current buffer is exactly one block
-    if (this.bufferSize === blockSize) {
-      this.bufferSize = 0;
-      return this.buffer;
-    }
-
-    // (2): Otherwise, copy buffers into `block`
+    // (1): If we've rewound to prior data, copy it within the existing block
     let byteLength = 0;
-    if (this.bufferSize > 0) {
-      block.set(this.buffer.subarray(-this.bufferSize), byteLength);
-      byteLength += this.bufferSize;
-      this.bufferSize = 0;
+    if (this.blockRewind > 0) {
+      byteLength += this.blockRewind;
+      block.copyWithin(0, -this.blockRewind);
+      this.blockRewind = 0;
     }
 
+    // (2): If we have the next chunk, read from it first
     let remaining = blockSize - byteLength;
     if (this.input != null && remaining > 0) {
       if (this.input.byteLength - this.inputOffset > remaining) {
-        const slice = this.input.subarray(
-          this.inputOffset,
-          (this.inputOffset += remaining)
+        // Optimization: We can return immediately if we have enough data
+        this.blockLocked = true;
+        block.set(
+          this.input.subarray(
+            this.inputOffset,
+            (this.inputOffset += remaining)
+          ),
+          byteLength
         );
-        block.set(slice, byteLength);
         return block;
       } else {
+        // We copy partially from input, since the input is exhausted
         const slice = this.input.subarray(this.inputOffset);
         block.set(slice, byteLength);
         byteLength += slice.byteLength;
@@ -99,17 +85,23 @@ export class ReadableStreamBlockReader {
         this.input = view;
         const slice = this.input.subarray(0, (this.inputOffset = remaining));
         // Optimization: If `block` is still empty, we can just return the slice directly
-        return byteLength !== 0 ? (block.set(slice, byteLength), block) : slice;
+        return (this.blockLocked = byteLength !== 0)
+          ? (block.set(slice, byteLength), block)
+          : slice;
       } else {
         block.set(view, byteLength);
         byteLength += view.byteLength;
       }
     }
 
+    this.blockLocked = true;
     if (byteLength === blockSize) {
       return block;
     } else if (byteLength > 0) {
-      return block.subarray(0, byteLength);
+      // Return a partial block at the end of the stream
+      // NOTE: Due to rewind we have to shift this data to the end of the block
+      block.copyWithin(blockSize - byteLength, 0, byteLength);
+      return block.subarray(blockSize - byteLength);
     } else {
       return null;
     }
@@ -124,20 +116,17 @@ export class ReadableStreamBlockReader {
    * block instead.
    */
   async pull(maxSize = this.blockSize): Promise<Uint8Array | null> {
-    if (this.bufferSize > 0) {
-      if (this.bufferSize <= maxSize) {
-        const output = this.buffer.subarray(-this.bufferSize);
-        this.bufferSize = 0;
-        return output;
-      } else {
-        const output = this.buffer.subarray(
-          -this.bufferSize,
-          -(this.bufferSize - maxSize)
-        );
-        this.bufferSize -= maxSize;
-        return output;
-      }
+    const { block, blockRewind } = this;
+    if (blockRewind > 0) {
+      // (1): If we've rewound to prior data, copy from within the existing block
+      // NOTE: If `maxSize < blockRewind`, rewinding isn't safe
+      this.blockLocked = true;
+      return this.blockRewind <= maxSize
+        ? ((this.blockRewind = 0), block.subarray(-blockRewind))
+        : block.subarray(-blockRewind, -(this.blockRewind -= maxSize));
     } else if (this.input != null) {
+      // (2): If we have a next chunk, return a slice of it
+      this.blockLocked = false;
       const inputSize = this.input.byteLength - this.inputOffset;
       if (inputSize <= maxSize) {
         const slice = this.input.subarray(this.inputOffset);
@@ -151,6 +140,8 @@ export class ReadableStreamBlockReader {
       }
     }
 
+    // (3): Otherwise, retrieve the next chunk from the underlying stream
+    this.blockLocked = false;
     const { done, value: view } = await this.next();
     if (done) {
       return null;
@@ -173,14 +164,17 @@ export class ReadableStreamBlockReader {
   async skip(requestedSize: number): Promise<number> {
     let remaining = requestedSize;
 
-    if (this.bufferSize >= remaining) {
-      this.bufferSize -= remaining;
+    // (1): If we've rewound to prior data, discard it
+    this.blockLocked = false;
+    if (this.blockRewind >= remaining) {
+      this.blockRewind -= remaining;
       return 0;
-    } else if (this.bufferSize > 0) {
-      remaining -= this.bufferSize;
-      this.bufferSize = 0;
+    } else if (this.blockRewind > 0) {
+      remaining -= this.blockRewind;
+      this.blockRewind = 0;
     }
 
+    // (2): If we have the next chunk, skip ahead in it
     if (this.input != null) {
       if (this.input.byteLength - this.inputOffset > remaining) {
         this.inputOffset += remaining;
@@ -191,6 +185,7 @@ export class ReadableStreamBlockReader {
       }
     }
 
+    // (3): Otherwise, get more chunks to skip over
     while (remaining > 0) {
       const { done, value: view } = await this.next();
       if (done) {
@@ -208,12 +203,11 @@ export class ReadableStreamBlockReader {
   }
 
   /** Re-adds byte array back to buffered data */
-  pushback(buffer: Uint8Array): void {
-    if (buffer.byteLength > this.buffer.byteLength - this.bufferSize) {
-      throw new RangeError('Pushback buffer is out of capacity');
-    } else if (buffer.byteLength > 0) {
-      reverseSet(this.buffer, buffer, this.bufferSize);
-      this.bufferSize += buffer.byteLength;
+  rewind(shiftEnd: number): void {
+    if (this.blockLocked) {
+      this.blockRewind += shiftEnd;
+    } else if (this.input != null) {
+      this.inputOffset -= shiftEnd;
     }
   }
 }
@@ -287,7 +281,7 @@ export async function* readUntilBoundary(
       // (3): We either have found the boundary or a partial boundary
       if (boundaryIdx === boundary.byteLength) {
         // (3.1): Complete boundary is present in `buffer` at `searchStart`
-        reader.pushback(buffer.subarray(bufferIdx));
+        reader.rewind(buffer.byteLength - bufferIdx);
         yield buffer.subarray(0, searchIdx);
         return;
       } else if (bufferIdx === buffer.byteLength) {
@@ -317,7 +311,7 @@ export async function* readUntilBoundary(
         }
         if (boundaryIdx === boundary.byteLength) {
           // Boundary found across `buffer` and `nextBuffer`
-          reader.pushback(nextBuffer.subarray(bufferIdx));
+          reader.rewind(nextBuffer.byteLength - bufferIdx);
           yield buffer.subarray(0, searchIdx);
           return;
         }
@@ -329,12 +323,4 @@ export async function* readUntilBoundary(
     yield output;
   }
   yield null;
-}
-
-function reverseSet(
-  target: Uint8Array,
-  source: Uint8Array,
-  reverseOffset: number
-): void {
-  target.set(source, target.byteLength - source.byteLength - reverseOffset);
 }
