@@ -1,4 +1,8 @@
-import { ReadableStreamBlockReader, readUntilBoundary } from './reader';
+import {
+  ReadableStreamBlockReader,
+  bytesToSkipTable,
+  readUntilBoundary,
+} from './reader';
 import { decodeName } from './multipartEncoding';
 import { ReadableStreamLike } from './conversions';
 import { MultipartHeaders, MultipartPart } from './multipartShared';
@@ -6,6 +10,7 @@ import { MultipartHeaders, MultipartPart } from './multipartShared';
 const BLOCK_SIZE = 4_096; /*4KiB*/
 
 const CRLF = new Uint8Array([13, 10]);
+const CRLF_SKIP_TABLE = bytesToSkipTable(CRLF);
 const MAX_PREAMBLE_SIZE = 16_000; /*16kB*/
 const MAX_HEADER_SIZE = 16_000; /*16kB*/
 const MAX_HEADERS_SIZE = 32_000; /*32kB*/
@@ -74,11 +79,13 @@ function parseContentDisposition(
 interface Boundary {
   /** Initial boundary at the beginning of the multipart stream after the preamble */
   raw: Uint8Array;
+  rawSkipTable: Uint8Array;
   /** Trailer boundary after every multipart part.
    * @remarks
    * After every multipart part that isn't the initial one we expect a leading CRLF sequence
    */
   trailer: Uint8Array;
+  trailerSkipTable: Uint8Array;
 }
 
 /** Create boundary patterns from `contentType` boundary parameter.
@@ -95,9 +102,13 @@ function convertToBoundaryBytes(contentType: string): Boundary {
   const boundaryHeader = contentType.match(boundaryHeaderRe);
   const boundaryRaw = `--${boundaryHeader?.[1] || '-'}`;
   const boundaryTrailer = `\r\n${boundaryRaw}`;
+  const raw = utf8Encode(boundaryRaw);
+  const trailer = utf8Encode(boundaryTrailer);
   return {
-    raw: utf8Encode(boundaryRaw),
-    trailer: utf8Encode(boundaryTrailer),
+    raw,
+    rawSkipTable: bytesToSkipTable(raw),
+    trailer,
+    trailerSkipTable: bytesToSkipTable(trailer),
   };
 }
 
@@ -106,7 +117,11 @@ async function expectPreamble(
   boundary: Boundary
 ): Promise<void> {
   let byteLength = 0;
-  for await (const chunk of readUntilBoundary(reader, boundary.raw)) {
+  for await (const chunk of readUntilBoundary(
+    reader,
+    boundary.raw,
+    boundary.rawSkipTable
+  )) {
     if (chunk == null) {
       throw new Error('Invalid Multipart Preamble: Unexpected EOF');
     } else if ((byteLength += chunk?.byteLength) > MAX_PREAMBLE_SIZE) {
@@ -121,11 +136,10 @@ async function expectTrailer(
   reader: ReadableStreamBlockReader,
   boundary: Boundary
 ): Promise<void> {
-  for await (const chunk of readUntilBoundary(reader, boundary.trailer)) {
-    if (chunk == null || chunk.byteLength !== 0) {
+  const chunk = await reader.pull(boundary.trailer.byteLength);
+  for (let idx = 0; idx < boundary.trailer.byteLength; idx++) {
+    if (chunk == null || chunk[idx] !== boundary.trailer[idx]) {
       throw new Error('Invalid Multipart Part: Expected trailing boundary');
-    } else {
-      break;
     }
   }
 }
@@ -140,7 +154,11 @@ async function decodeHeaders(
   const headers: MultipartHeaders = Object.create(null);
   while (byteLength < MAX_HEADERS_SIZE) {
     let header = '';
-    for await (const chunk of readUntilBoundary(reader, CRLF)) {
+    for await (const chunk of readUntilBoundary(
+      reader,
+      CRLF,
+      CRLF_SKIP_TABLE
+    )) {
       if (chunk == null) {
         throw new Error('Invalid Multipart Headers: Unexpected EOF');
       } else if (
@@ -186,13 +204,6 @@ async function decodeHeaders(
     );
   }
   return headers;
-}
-
-// NOTE(@kitten): We don't really want to copy but something isn't applying backpressure correctly
-function copyUint8Array(src: Uint8Array) {
-  const dst = new Uint8Array(src.byteLength);
-  dst.set(src);
-  return dst;
 }
 
 interface ParseMultipartParams {
@@ -250,7 +261,7 @@ export async function* parseMultipart(
               if (!buffer)
                 throw new Error('Invalid Multipart Part: Unexpected EOF');
               remaining -= buffer.byteLength;
-              controller.enqueue(copyUint8Array(buffer));
+              controller.enqueue(buffer.slice());
             }
             if (!remaining) {
               await expectTrailer(reader, boundary);
@@ -263,7 +274,11 @@ export async function* parseMultipart(
       );
     } else {
       // Without a size, we instead output a stream that ends at the multipart boundary
-      const iterator = readUntilBoundary(reader, boundary.trailer);
+      const iterator = readUntilBoundary(
+        reader,
+        boundary.trailer,
+        boundary.trailerSkipTable
+      );
       stream = new ReadableStream(
         {
           cancel: (cancel = async function cancel() {
@@ -282,7 +297,7 @@ export async function* parseMultipart(
             } else if (!result.value) {
               throw new Error('Invalid Multipart Part: Unexpected EOF');
             } else {
-              controller.enqueue(copyUint8Array(result.value));
+              controller.enqueue(result.value.slice());
             }
           },
         },
