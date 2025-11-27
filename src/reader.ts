@@ -31,8 +31,8 @@ export class ReadableStreamBlockReader {
   // to prevent concurrent reads from failing. Instead, they'll be shared between calls.
   private next: StreamIterator<Uint8Array>;
 
-  readonly blockSize: number;
-  readonly block: Uint8Array;
+  private blockSize: number;
+  private block: Uint8Array;
 
   constructor(stream: ReadableStreamLike<Uint8Array>, blockSize: number) {
     this.next = streamLikeToIterator(stream);
