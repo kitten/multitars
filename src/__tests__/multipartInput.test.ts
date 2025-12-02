@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { parseMultipart } from '../multipartInput';
-import { multipartContentType, streamMultipart } from '../multipartOutput';
 import { iterableToStream } from './utils';
 import { MultipartPart } from '../multipartShared';
+import * as multipartOutput from '../multipartOutput';
+import * as multipartUtils from './utils/multipartUtils';
 
 function chunk(
   readable: ReadableStream<Uint8Array>
@@ -141,13 +142,15 @@ describe('parseMultipart', () => {
     }
   });
 
-  it('extracts streamMultipart output successfully', async () => {
+  it('extracts "multipartOutput" output successfully', async () => {
+    const data = new Uint8Array(10 * 1024).fill('0'.charCodeAt(0));
+
     const body = iterableToStream(
-      streamMultipart(
+      multipartOutput.streamMultipart(
         (async function* () {
           yield [
             'filename-a',
-            new File(['test content a'], 'filename-a.txt', {
+            new File([data], 'filename-a.txt', {
               type: 'plain/text',
             }),
           ];
@@ -158,7 +161,7 @@ describe('parseMultipart', () => {
 
     const entries: any[] = [];
     const multipart = parseMultipart(body, {
-      contentType: multipartContentType,
+      contentType: multipartOutput.multipartContentType,
     });
     for await (const entry of multipart) {
       entries.push({
@@ -169,11 +172,14 @@ describe('parseMultipart', () => {
       });
     }
     expect(entries).toMatchSnapshot();
+
+    expect(entries[0].size).toBe(data.byteLength);
+    expect(entries[0].text.length).toBe(data.byteLength);
   });
 
-  it('extracts streamMultipart output successfully if the first file is skipped', async () => {
+  it('extracts "multipartOutput" output successfully if the first file is skipped', async () => {
     const body = iterableToStream(
-      streamMultipart(
+      multipartOutput.streamMultipart(
         (async function* () {
           yield [
             'filename-a.txt',
@@ -191,7 +197,7 @@ describe('parseMultipart', () => {
 
     const entries: any[] = [];
     const multipart = parseMultipart(body, {
-      contentType: multipartContentType,
+      contentType: multipartOutput.multipartContentType,
     });
     for await (const entry of multipart) {
       if (entry.name === 'filename-a.txt') {
@@ -208,9 +214,9 @@ describe('parseMultipart', () => {
     expect(entries).toMatchSnapshot();
   });
 
-  it('extracts streamMultipart output entries successfully if the first entry is skipped', async () => {
+  it('extracts "multipartOutput" output entries successfully if the first entry is skipped', async () => {
     const body = iterableToStream(
-      streamMultipart(
+      multipartOutput.streamMultipart(
         (async function* () {
           yield ['a', 'test-content-a'];
           yield ['b', 'test-content-b'];
@@ -220,7 +226,7 @@ describe('parseMultipart', () => {
 
     const entries: any[] = [];
     const multipart = parseMultipart(body, {
-      contentType: multipartContentType,
+      contentType: multipartOutput.multipartContentType,
     });
     for await (const entry of multipart) {
       if (entry.name === 'a') {
@@ -237,9 +243,9 @@ describe('parseMultipart', () => {
     expect(entries).toMatchSnapshot();
   });
 
-  it('extracts streamMultipart output with custom headers', async () => {
+  it('extracts "multipartOutput" stream with custom headers', async () => {
     const body = iterableToStream(
-      streamMultipart(
+      multipartOutput.streamMultipart(
         (async function* () {
           yield [
             'filename-a.txt',
@@ -253,7 +259,7 @@ describe('parseMultipart', () => {
 
     const entries: any[] = [];
     const multipart = parseMultipart(body, {
-      contentType: multipartContentType,
+      contentType: multipartOutput.multipartContentType,
     });
     for await (const entry of multipart) {
       expect(entry.headers['custom-signature']).toBe('123');
@@ -266,5 +272,31 @@ describe('parseMultipart', () => {
       });
     }
     expect(entries).toMatchSnapshot();
+  });
+
+  it('extracts "multipartUtils" stream', async () => {
+    const data = new Uint8Array(10 * 1024).fill('0'.charCodeAt(0));
+
+    const body = iterableToStream(
+      multipartUtils.createMultipartBodyFromFilesAsync([new File([data], 'x')])
+    );
+
+    const entries: any[] = [];
+    const multipart = parseMultipart(body, {
+      contentType: multipartUtils.multipartContentType,
+    });
+    for await (const entry of multipart) {
+      entries.push({
+        name: entry.name,
+        size: entry.size,
+        type: entry.type,
+        headers: entry.headers,
+        text: await entry.text(),
+      });
+    }
+    expect(entries).toMatchSnapshot();
+
+    expect(entries[0].size).toBe(data.byteLength);
+    expect(entries[0].text.length).toBe(data.byteLength);
   });
 });
