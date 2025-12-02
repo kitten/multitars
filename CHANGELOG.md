@@ -1,5 +1,12 @@
 # multitars
 
+## 0.2.3
+
+### Patch Changes
+
+- Revert trailer boundary check update
+  Submitted by [@kitten](https://github.com/kitten) (See [#15](https://github.com/kitten/multitars/pull/15))
+
 ## 0.2.2
 
 ### Patch Changes
