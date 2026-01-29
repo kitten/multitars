@@ -1,5 +1,12 @@
 # multitars
 
+## 0.2.4
+
+### Patch Changes
+
+- Update rollup config for reduced output and exclude sources from sourcemaps
+  Submitted by [@kitten](https://github.com/kitten) (See [#17](https://github.com/kitten/multitars/pull/17))
+
 ## 0.2.3
 
 ### Patch Changes
