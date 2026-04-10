@@ -1,5 +1,12 @@
 # multitars
 
+## 0.2.5
+
+### Patch Changes
+
+- In workerd's `ReadableStream` implementation, prevent concurrent `cancel` call on underlying source during in-flight pulls
+  Submitted by [@kitten](https://github.com/kitten) (See [#19](https://github.com/kitten/multitars/pull/19))
+
 ## 0.2.4
 
 ### Patch Changes
