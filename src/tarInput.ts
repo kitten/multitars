@@ -1,4 +1,4 @@
-import { ReadableStreamLike } from './conversions';
+import { ReadableStreamLike, createReadableStream } from './conversions';
 import { ReadableStreamBlockReader } from './reader';
 
 import {
@@ -265,48 +265,43 @@ export async function* untar(
 ): AsyncGenerator<TarFile | TarChunk> {
   const gax = initTarHeader(null);
   const reader = new ReadableStreamBlockReader(stream, BLOCK_SIZE);
-  const streamParams = new ByteLengthQueuingStrategy({ highWaterMark: 0 });
 
   let header: TarHeader | undefined;
   while ((header = await decodeHeader(reader, gax)) != null) {
     const pad = blockPad(header.size);
     let consumedTrailer = pad === 0;
     let remaining = header._paxSize || header.size;
-    let cancel: () => Promise<void>;
-    const stream = new ReadableStream<Uint8Array<ArrayBuffer>>(
-      {
-        // NOTE(@kitten): This is needed in Cloudflare to attach the expected size to the stream
-        expectedLength: header.size,
-        cancel: (cancel = async function cancel() {
+    const stream = createReadableStream<Uint8Array<ArrayBuffer>>({
+      // NOTE(@kitten): This is needed in Cloudflare to attach the expected size to the stream
+      expectedLength: header.size,
+      async cancel() {
+        if (!consumedTrailer) {
+          consumedTrailer = true;
+          remaining += pad;
+        }
+        if (remaining > 0) {
+          const skipped = await reader.skip(remaining);
+          if (skipped > 0) throw new Error('Invalid Tar: Unexpected EOF');
+          remaining = 0;
+        }
+      },
+      async pull(controller) {
+        if (remaining) {
+          const buffer = await reader.pull(remaining);
+          if (!buffer) throw new Error('Invalid Tar: Unexpected EOF');
+          remaining -= buffer.byteLength;
+          controller.enqueue(buffer.slice());
+        }
+        if (!remaining) {
           if (!consumedTrailer) {
             consumedTrailer = true;
-            remaining += pad;
-          }
-          if (remaining > 0) {
-            const skipped = await reader.skip(remaining);
+            const skipped = await reader.skip(pad);
             if (skipped > 0) throw new Error('Invalid Tar: Unexpected EOF');
-            remaining = 0;
           }
-        }),
-        async pull(controller) {
-          if (remaining) {
-            const buffer = await reader.pull(remaining);
-            if (!buffer) throw new Error('Invalid Tar: Unexpected EOF');
-            remaining -= buffer.byteLength;
-            controller.enqueue(buffer.slice());
-          }
-          if (!remaining) {
-            if (!consumedTrailer) {
-              consumedTrailer = true;
-              const skipped = await reader.skip(pad);
-              if (skipped > 0) throw new Error('Invalid Tar: Unexpected EOF');
-            }
-            controller.close();
-          }
-        },
+          controller.close();
+        }
       },
-      streamParams
-    );
+    });
 
     let chunk: TarFile | TarChunk;
     switch (header.typeflag) {
@@ -321,13 +316,13 @@ export async function* untar(
         chunk = new TarChunk(stream, header);
         break;
       default:
-        await cancel();
+        await stream.cancel();
         continue;
     }
 
     yield chunk;
     if (remaining > 0 || !consumedTrailer) {
-      await (stream.locked ? cancel() : stream.cancel());
+      await stream.cancel();
     }
   }
 }

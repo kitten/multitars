@@ -4,7 +4,7 @@ import {
   readUntilBoundary,
 } from './reader';
 import { decodeName } from './multipartEncoding';
-import { ReadableStreamLike } from './conversions';
+import { ReadableStreamLike, createReadableStream } from './conversions';
 import { MultipartHeaders, MultipartPart } from './multipartShared';
 
 const BLOCK_SIZE = 4_096; /*4KiB*/
@@ -223,7 +223,6 @@ export async function* parseMultipart(
 ): AsyncGenerator<MultipartPart> {
   const boundary = convertToBoundaryBytes(params.contentType);
   const reader = new ReadableStreamBlockReader(stream, BLOCK_SIZE);
-  const streamParams = new ByteLengthQueuingStrategy({ highWaterMark: 0 });
 
   await expectPreamble(reader, boundary);
 
@@ -242,41 +241,37 @@ export async function* parseMultipart(
     let reachedEnd = false;
     let remaining = 0;
     let stream: ReadableStream;
-    let cancel: () => Promise<void>;
     if (size !== null) {
       // With a known size, we output a sized stream (similar to tar files)
       remaining = size;
-      stream = new ReadableStream(
-        {
-          expectedLength: size,
-          cancel: (cancel = async function cancel() {
-            if (remaining > 0) {
-              remaining = await reader.skip(remaining);
-              if (remaining > 0)
-                throw new Error('Invalid Multipart Part: Unexpected EOF');
-            }
-            if (!reachedEnd) {
-              await expectTrailer(reader, boundary);
-              reachedEnd = true;
-            }
-          }),
-          async pull(controller) {
-            if (remaining) {
-              const buffer = await reader.pull(remaining);
-              if (!buffer)
-                throw new Error('Invalid Multipart Part: Unexpected EOF');
-              remaining -= buffer.byteLength;
-              controller.enqueue(buffer.slice());
-            }
-            if (!remaining) {
-              await expectTrailer(reader, boundary);
-              reachedEnd = true;
-              controller.close();
-            }
-          },
+      stream = createReadableStream({
+        expectedLength: size,
+        async cancel() {
+          if (remaining > 0) {
+            remaining = await reader.skip(remaining);
+            if (remaining > 0)
+              throw new Error('Invalid Multipart Part: Unexpected EOF');
+          }
+          if (!reachedEnd) {
+            await expectTrailer(reader, boundary);
+            reachedEnd = true;
+          }
         },
-        streamParams
-      );
+        async pull(controller) {
+          if (remaining) {
+            const buffer = await reader.pull(remaining);
+            if (!buffer)
+              throw new Error('Invalid Multipart Part: Unexpected EOF');
+            remaining -= buffer.byteLength;
+            controller.enqueue(buffer.slice());
+          }
+          if (!remaining) {
+            await expectTrailer(reader, boundary);
+            reachedEnd = true;
+            controller.close();
+          }
+        },
+      });
     } else {
       // Without a size, we instead output a stream that ends at the multipart boundary
       const iterator = readUntilBoundary(
@@ -284,30 +279,27 @@ export async function* parseMultipart(
         boundary.trailer,
         boundary.trailerSkipTable
       );
-      stream = new ReadableStream(
-        {
-          cancel: (cancel = async function cancel() {
-            for await (const chunk of iterator) {
-              if (!chunk) {
-                throw new Error('Invalid Multipart Part: Unexpected EOF');
-              }
-            }
-            reachedEnd = true;
-          }),
-          async pull(controller) {
-            const result = await iterator.next();
-            if (result.done) {
-              controller.close();
-              reachedEnd = true;
-            } else if (!result.value) {
+      stream = createReadableStream({
+        async cancel() {
+          for await (const chunk of iterator) {
+            if (!chunk) {
               throw new Error('Invalid Multipart Part: Unexpected EOF');
-            } else {
-              controller.enqueue(result.value.slice());
             }
-          },
+          }
+          reachedEnd = true;
         },
-        streamParams
-      );
+        async pull(controller) {
+          const result = await iterator.next();
+          if (result.done) {
+            controller.close();
+            reachedEnd = true;
+          } else if (!result.value) {
+            throw new Error('Invalid Multipart Part: Unexpected EOF');
+          } else {
+            controller.enqueue(result.value.slice());
+          }
+        },
+      });
     }
 
     yield new MultipartPart(stream, name, {
@@ -317,7 +309,7 @@ export async function* parseMultipart(
     });
 
     if (remaining > 0 || !reachedEnd) {
-      await (stream.locked ? cancel() : stream.cancel());
+      await stream.cancel();
     }
   }
 }
