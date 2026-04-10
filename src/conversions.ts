@@ -3,6 +3,42 @@ export type ReadableStreamLike<T> =
   | AsyncIterable<T>
   | Iterable<T>;
 
+const STREAM_STRATEGY: QueuingStrategy = { highWaterMark: 0 };
+
+/** Creates a `ReadableStream` that serializes `cancel` after any in-flight `pull`.
+ * @remarks
+ * Some runtimes (e.g. Cloudflare workerd) only support a single pending read on
+ * the underlying stream at a time. Per spec, `cancel` can be called while `pull`
+ * is still in-flight, which causes concurrent reads. This wrapper ensures `cancel`
+ * waits for any pending `pull` to settle first.
+ */
+export function createReadableStream<T>(
+  source: UnderlyingSource<T> & { expectedLength?: number }
+): ReadableStream<T> {
+  const { pull, cancel } = source;
+  if (!pull || !cancel) {
+    return new ReadableStream(source, STREAM_STRATEGY);
+  }
+  let inFlight: void | PromiseLike<void>;
+  return new ReadableStream<T>(
+    {
+      ...source,
+      pull(controller) {
+        return (inFlight = pull(controller));
+      },
+      cancel(reason) {
+        if (inFlight != null) {
+          const settle = () => cancel(reason);
+          return Promise.resolve(inFlight).then(settle, settle);
+        } else {
+          return cancel(reason);
+        }
+      },
+    },
+    STREAM_STRATEGY
+  );
+}
+
 export function streamToAsyncIterable<T>(
   stream: ReadableStream<T>
 ): AsyncIterable<T> {
