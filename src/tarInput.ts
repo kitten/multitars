@@ -271,11 +271,10 @@ export async function* untar(
     const pad = blockPad(header.size);
     let consumedTrailer = pad === 0;
     let remaining = header._paxSize || header.size;
-    let cancel: () => Promise<void>;
     const stream = createReadableStream<Uint8Array<ArrayBuffer>>({
       // NOTE(@kitten): This is needed in Cloudflare to attach the expected size to the stream
       expectedLength: header.size,
-      cancel: (cancel = async function cancel() {
+      async cancel() {
         if (!consumedTrailer) {
           consumedTrailer = true;
           remaining += pad;
@@ -285,7 +284,7 @@ export async function* untar(
           if (skipped > 0) throw new Error('Invalid Tar: Unexpected EOF');
           remaining = 0;
         }
-      }),
+      },
       async pull(controller) {
         if (remaining) {
           const buffer = await reader.pull(remaining);
@@ -317,13 +316,13 @@ export async function* untar(
         chunk = new TarChunk(stream, header);
         break;
       default:
-        await cancel();
+        await stream.cancel();
         continue;
     }
 
     yield chunk;
     if (remaining > 0 || !consumedTrailer) {
-      await (stream.locked ? cancel() : stream.cancel());
+      await stream.cancel();
     }
   }
 }

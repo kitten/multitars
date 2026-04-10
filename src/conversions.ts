@@ -11,32 +11,35 @@ const STREAM_STRATEGY: QueuingStrategy = { highWaterMark: 0 };
  * the underlying stream at a time. Per spec, `cancel` can be called while `pull`
  * is still in-flight, which causes concurrent reads. This wrapper ensures `cancel`
  * waits for any pending `pull` to settle first.
+ *
+ * The returned stream has a `cancel` method that is safe to call directly,
+ * even when the stream is locked.
  */
 export function createReadableStream<T>(
   source: UnderlyingSource<T> & { expectedLength?: number }
 ): ReadableStream<T> {
   const { pull, cancel } = source;
-  if (!pull || !cancel) {
-    return new ReadableStream(source, STREAM_STRATEGY);
+  if (pull && cancel) {
+    let inFlight: void | PromiseLike<void>;
+    source.pull = function wrappedPull(controller) {
+      return (inFlight = pull(controller));
+    };
+    source.cancel = function wrappedCancel() {
+      if (inFlight != null) {
+        const settle = () => cancel();
+        return Promise.resolve(inFlight).then(settle, settle);
+      }
+      return cancel();
+    };
   }
-  let inFlight: void | PromiseLike<void>;
-  return new ReadableStream<T>(
-    {
-      ...source,
-      pull(controller) {
-        return (inFlight = pull(controller));
-      },
-      cancel(reason) {
-        if (inFlight != null) {
-          const settle = () => cancel(reason);
-          return Promise.resolve(inFlight).then(settle, settle);
-        } else {
-          return cancel(reason);
-        }
-      },
-    },
-    STREAM_STRATEGY
-  );
+  const stream = new ReadableStream<T>(source, STREAM_STRATEGY);
+  if (source.cancel) {
+    const _cancel = stream.cancel;
+    stream.cancel = async function cancel(reason) {
+      return (stream.locked ? source.cancel! : _cancel).call(stream, reason);
+    };
+  }
+  return stream;
 }
 
 export function streamToAsyncIterable<T>(

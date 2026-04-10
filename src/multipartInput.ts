@@ -241,13 +241,12 @@ export async function* parseMultipart(
     let reachedEnd = false;
     let remaining = 0;
     let stream: ReadableStream;
-    let cancel: () => Promise<void>;
     if (size !== null) {
       // With a known size, we output a sized stream (similar to tar files)
       remaining = size;
       stream = createReadableStream({
         expectedLength: size,
-        cancel: (cancel = async function cancel() {
+        async cancel() {
           if (remaining > 0) {
             remaining = await reader.skip(remaining);
             if (remaining > 0)
@@ -257,7 +256,7 @@ export async function* parseMultipart(
             await expectTrailer(reader, boundary);
             reachedEnd = true;
           }
-        }),
+        },
         async pull(controller) {
           if (remaining) {
             const buffer = await reader.pull(remaining);
@@ -281,14 +280,14 @@ export async function* parseMultipart(
         boundary.trailerSkipTable
       );
       stream = createReadableStream({
-        cancel: (cancel = async function cancel() {
+        async cancel() {
           for await (const chunk of iterator) {
             if (!chunk) {
               throw new Error('Invalid Multipart Part: Unexpected EOF');
             }
           }
           reachedEnd = true;
-        }),
+        },
         async pull(controller) {
           const result = await iterator.next();
           if (result.done) {
@@ -310,7 +309,7 @@ export async function* parseMultipart(
     });
 
     if (remaining > 0 || !reachedEnd) {
-      await (stream.locked ? cancel() : stream.cancel());
+      await stream.cancel();
     }
   }
 }
