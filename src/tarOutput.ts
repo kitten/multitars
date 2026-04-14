@@ -4,6 +4,8 @@ import {
   streamToAsyncIterable,
 } from './conversions';
 
+import { encoder } from './shared';
+
 import {
   BLOCK_SIZE,
   CHECKSUM_INITIAL,
@@ -18,8 +20,8 @@ import {
 
 const MAX_NAME_LEN = 100;
 const MAX_PREFIX_LEN = 155;
-const ENCODER = new TextEncoder();
 const MAGIC = 'ustar\0' + '00';
+const PAD = new Uint8Array(BLOCK_SIZE);
 
 // See: https://github.com/mafintosh/tar-stream/blob/126968f/constants.js#L1C1-L8C2
 function modeToType(mode: number) {
@@ -45,7 +47,7 @@ function encodeString(
   to: number,
   value: string | null | undefined
 ) {
-  if (value) ENCODER.encodeInto(`${value}\0`, target.subarray(from, to));
+  if (value) encoder.encodeInto(`${value}\0`, target.subarray(from, to));
 }
 
 function encodeOctal(
@@ -73,10 +75,15 @@ function encodeOctal(
       flipped ||= byte !== 0;
     }
   } else if (value) {
-    const octal = Math.floor(value).toString(8);
-    const pad = length - octal.length - 2;
-    const out = pad >= 0 ? `${'0'.repeat(pad)}${octal} ` : octal;
-    encodeString(target, from, to, out);
+    let idx = to - 2;
+    let num = value;
+    if (num * 8 <= max) target[idx--] = 0x20;
+    while (num > 0) {
+      const digit = num % 8;
+      target[idx--] = 0x30 + digit;
+      num = (num - digit) / 8;
+    }
+    while (idx >= from) target[idx--] = 0x30;
   }
 }
 
@@ -134,7 +141,7 @@ function encodeBase(target: Uint8Array, header: TarHeader): void {
   if (!header.typeflag) header.typeflag = modeToType(header.mode);
   if (!header.mode)
     header.mode = header.typeflag === TarTypeFlag.DIRECTORY ? 0o755 : 0o644;
-  if (!header.mtime) header.mtime = Math.floor(new Date().valueOf() / 1000);
+  if (!header.mtime) header.mtime = Math.floor(Date.now() / 1000);
 
   encodeString(target, 0, 100, name);
   encodeOctal(target, 100, 108, header.mode & 0o7777);
@@ -175,7 +182,7 @@ function encodePax(header: TarHeader): Uint8Array<ArrayBuffer> | null {
   if (header._paxName) output += encodePaxEntry('path', header._paxName);
   if (header._paxLinkName)
     output += encodePaxEntry('linkpath', header._paxLinkName);
-  return output ? ENCODER.encode(output) : null;
+  return output ? encoder.encode(output) : null;
 }
 
 function paxName(name: string) {
@@ -234,7 +241,7 @@ export async function* tar(
       yield encodeHeader(paxHeader);
       yield pax;
       const pad = blockPad(pax.byteLength);
-      if (pad) yield new Uint8Array(pad);
+      if (pad) yield PAD.subarray(0, pad);
     }
 
     yield encodeHeader(header);
@@ -247,7 +254,7 @@ export async function* tar(
     }
 
     const pad = blockPad(entry.size);
-    if (pad) yield new Uint8Array(pad);
+    if (pad) yield PAD.subarray(0, pad);
   }
 
   yield new Uint8Array(BLOCK_SIZE * 2);

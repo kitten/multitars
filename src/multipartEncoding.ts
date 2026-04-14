@@ -1,7 +1,4 @@
-export let BOUNDARY_ID = '----formdata-';
-for (let i = 16; i > 0; i--) {
-  BOUNDARY_ID += ((Math.random() * 1e8) | 0).toString(36)[0];
-}
+export const BOUNDARY_ID = `----formdata-${Math.random().toString(36).slice(2)}`;
 
 const pencode = (c: string) => {
   switch (c) {

@@ -3,6 +3,7 @@ import {
   bytesToSkipTable,
   readUntilBoundary,
 } from './reader';
+import { encoder } from './shared';
 import { decodeName } from './multipartEncoding';
 import { ReadableStreamLike, createReadableStream } from './conversions';
 import { MultipartHeaders, MultipartPart } from './multipartShared';
@@ -15,7 +16,7 @@ const MAX_PREAMBLE_SIZE = 16_000; /*16kB*/
 const MAX_HEADER_SIZE = 16_000; /*16kB*/
 const MAX_HEADERS_SIZE = 32_000; /*32kB*/
 const boundaryHeaderRe = /boundary="?([^=";]+)"?/i;
-const encoder = new TextEncoder();
+const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 
 function utf8Encode(
   content: string | ArrayBufferView | ArrayBufferLike
@@ -155,7 +156,6 @@ async function decodeHeaders(
   // NOTE: The characters we're decoding in headers is restricted, and we're therefore
   // more strict here. The `stream` option is also omitted below
   let byteLength = 0;
-  const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
   const headers: MultipartHeaders = Object.create(null);
   while (byteLength < MAX_HEADERS_SIZE) {
     let header = '';
@@ -263,7 +263,11 @@ export async function* parseMultipart(
             if (!buffer)
               throw new Error('Invalid Multipart Part: Unexpected EOF');
             remaining -= buffer.byteLength;
-            controller.enqueue(buffer.slice());
+            controller.enqueue(
+              (reader.blockLocked
+                ? buffer.slice()
+                : buffer) as Uint8Array<ArrayBuffer>
+            );
           }
           if (!remaining) {
             await expectTrailer(reader, boundary);

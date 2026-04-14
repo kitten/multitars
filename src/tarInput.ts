@@ -1,5 +1,6 @@
 import { ReadableStreamLike, createReadableStream } from './conversions';
 import { ReadableStreamBlockReader } from './reader';
+import { decoder } from './shared';
 
 import {
   BLOCK_SIZE,
@@ -12,8 +13,6 @@ import {
   initTarHeader,
   blockPad,
 } from './tarShared';
-
-const DECODER = new TextDecoder();
 
 async function decodePax(
   reader: ReadableStreamBlockReader,
@@ -28,7 +27,7 @@ async function decodePax(
       throw new Error('Invalid Tar: Unexpected EOF while parsing PAX data');
     remaining -= block.byteLength;
     if (remaining < 0) block = block.subarray(0, remaining);
-    pax += DECODER.decode(block, { stream: true });
+    pax += decoder.decode(block, { stream: true });
   }
   for (let from = 0, to = 0; from < pax.length; to = 0) {
     while (to < pax.length && pax.charCodeAt(to) !== 32) to++;
@@ -99,7 +98,7 @@ function checkChecksum(bytes: Uint8Array): number {
 function decodeString(bytes: Uint8Array, from: number, to: number): string {
   let end = from;
   while (end < to && bytes[end] !== 0) end++;
-  return end > from ? DECODER.decode(bytes.subarray(from, end)) : '';
+  return end > from ? decoder.decode(bytes.subarray(from, end)) : '';
 }
 
 async function decodeLongString(
@@ -117,27 +116,32 @@ async function decodeLongString(
     if (endIndex === -1) {
       endIndex = block.indexOf(0);
       if (endIndex > -1) block = block.subarray(0, endIndex);
-      output += DECODER.decode(block, { stream: true });
+      output += decoder.decode(block, { stream: true });
     }
   }
-  output += DECODER.decode();
+  output += decoder.decode();
   return output;
 }
 
 function decodeOctal(bytes: Uint8Array, from: number, to: number): number {
-  const end = to - 1;
   let val = 0;
   let idx = to;
   if (bytes[from] === 0x80) {
-    while (idx-- > from + 1) val += bytes[idx] * 256 ** (end - idx);
+    let mul = 1;
+    while (idx-- > from + 1) {
+      val += bytes[idx] * mul;
+      mul *= 256;
+    }
     return val;
   } else if (bytes[from] === 0xff) {
+    let mul = 1;
     let flipped = false;
     while (idx-- > from) {
       const f = flipped
         ? 0xff ^ bytes[idx] // ones comp
         : (0xff ^ bytes[idx]) + 1; // twos comp
-      val -= (f & 0xff) * 256 ** (end - idx);
+      val -= (f & 0xff) * mul;
+      mul *= 256;
       flipped ||= bytes[idx] !== 0;
     }
     return val;
@@ -288,7 +292,11 @@ export async function* untar(
           const buffer = await reader.pull(remaining);
           if (!buffer) throw new Error('Invalid Tar: Unexpected EOF');
           remaining -= buffer.byteLength;
-          controller.enqueue(buffer.slice());
+          controller.enqueue(
+            (reader.blockLocked
+              ? buffer.slice()
+              : buffer) as Uint8Array<ArrayBuffer>
+          );
         }
         if (!remaining) {
           if (!consumedTrailer) {

@@ -1,4 +1,5 @@
 import { streamToAsyncIterable } from './conversions';
+import { decoder } from './shared';
 
 async function streamToBuffer(
   stream: ReadableStream<Uint8Array>
@@ -26,10 +27,9 @@ async function streamToText(
   stream: ReadableStream<Uint8Array>
 ): Promise<string> {
   let output = '';
-  const decoder = new TextDecoder();
   for await (const chunk of streamToAsyncIterable(stream))
     output += decoder.decode(chunk, { stream: true });
-  return output;
+  return output + decoder.decode();
 }
 
 export interface StreamFileOptions {
