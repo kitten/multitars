@@ -126,19 +126,24 @@ async function decodeLongString(
 }
 
 function decodeOctal(bytes: Uint8Array, from: number, to: number): number {
-  const end = to - 1;
   let val = 0;
   let idx = to;
   if (bytes[from] === 0x80) {
-    while (idx-- > from + 1) val += bytes[idx] * 256 ** (end - idx);
+    let mul = 1;
+    while (idx-- > from + 1) {
+      val += bytes[idx] * mul;
+      mul *= 256;
+    }
     return val;
   } else if (bytes[from] === 0xff) {
+    let mul = 1;
     let flipped = false;
     while (idx-- > from) {
       const f = flipped
         ? 0xff ^ bytes[idx] // ones comp
         : (0xff ^ bytes[idx]) + 1; // twos comp
-      val -= (f & 0xff) * 256 ** (end - idx);
+      val -= (f & 0xff) * mul;
+      mul *= 256;
       flipped ||= bytes[idx] !== 0;
     }
     return val;
