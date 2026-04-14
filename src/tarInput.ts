@@ -1,5 +1,6 @@
 import { ReadableStreamLike, createReadableStream } from './conversions';
 import { ReadableStreamBlockReader } from './reader';
+import { decoder } from './shared';
 
 import {
   BLOCK_SIZE,
@@ -12,8 +13,6 @@ import {
   initTarHeader,
   blockPad,
 } from './tarShared';
-
-const DECODER = new TextDecoder();
 
 async function decodePax(
   reader: ReadableStreamBlockReader,
@@ -28,7 +27,7 @@ async function decodePax(
       throw new Error('Invalid Tar: Unexpected EOF while parsing PAX data');
     remaining -= block.byteLength;
     if (remaining < 0) block = block.subarray(0, remaining);
-    pax += DECODER.decode(block, { stream: true });
+    pax += decoder.decode(block, { stream: true });
   }
   for (let from = 0, to = 0; from < pax.length; to = 0) {
     while (to < pax.length && pax.charCodeAt(to) !== 32) to++;
@@ -99,7 +98,7 @@ function checkChecksum(bytes: Uint8Array): number {
 function decodeString(bytes: Uint8Array, from: number, to: number): string {
   let end = from;
   while (end < to && bytes[end] !== 0) end++;
-  return end > from ? DECODER.decode(bytes.subarray(from, end)) : '';
+  return end > from ? decoder.decode(bytes.subarray(from, end)) : '';
 }
 
 async function decodeLongString(
@@ -118,11 +117,11 @@ async function decodeLongString(
       // any strings we parse at the trailing zero byte
       endIndex = block.indexOf(0);
       if (endIndex > -1) block = block.subarray(0, endIndex);
-      output += DECODER.decode(block, { stream: true });
+      output += decoder.decode(block, { stream: true });
     }
     break;
   }
-  output += DECODER.decode();
+  output += decoder.decode();
   return output;
 }
 

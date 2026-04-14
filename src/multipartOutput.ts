@@ -1,4 +1,5 @@
 import { encodeName, BOUNDARY_ID } from './multipartEncoding';
+import { encoder } from './shared';
 import {
   streamToAsyncIterable,
   type ReadableStreamLike,
@@ -74,7 +75,6 @@ export async function* streamMultipart(
   entries: ReadableStreamLike<FormEntry>
 ): AsyncGenerator<Uint8Array<ArrayBuffer>> {
   const next = streamLikeToIterator(entries);
-  const encoder = new TextEncoder();
   let result: Awaited<ReturnType<typeof next>>;
   while (!(result = await next()).done && result.value) {
     const name = result.value[0];

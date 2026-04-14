@@ -4,6 +4,8 @@ import {
   streamToAsyncIterable,
 } from './conversions';
 
+import { encoder } from './shared';
+
 import {
   BLOCK_SIZE,
   CHECKSUM_INITIAL,
@@ -18,7 +20,6 @@ import {
 
 const MAX_NAME_LEN = 100;
 const MAX_PREFIX_LEN = 155;
-const ENCODER = new TextEncoder();
 const MAGIC = 'ustar\0' + '00';
 
 // See: https://github.com/mafintosh/tar-stream/blob/126968f/constants.js#L1C1-L8C2
@@ -45,7 +46,7 @@ function encodeString(
   to: number,
   value: string | null | undefined
 ) {
-  if (value) ENCODER.encodeInto(`${value}\0`, target.subarray(from, to));
+  if (value) encoder.encodeInto(`${value}\0`, target.subarray(from, to));
 }
 
 function encodeOctal(
@@ -175,7 +176,7 @@ function encodePax(header: TarHeader): Uint8Array<ArrayBuffer> | null {
   if (header._paxName) output += encodePaxEntry('path', header._paxName);
   if (header._paxLinkName)
     output += encodePaxEntry('linkpath', header._paxLinkName);
-  return output ? ENCODER.encode(output) : null;
+  return output ? encoder.encode(output) : null;
 }
 
 function paxName(name: string) {

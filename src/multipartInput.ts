@@ -3,6 +3,7 @@ import {
   bytesToSkipTable,
   readUntilBoundary,
 } from './reader';
+import { encoder } from './shared';
 import { decodeName } from './multipartEncoding';
 import { ReadableStreamLike, createReadableStream } from './conversions';
 import { MultipartHeaders, MultipartPart } from './multipartShared';
@@ -15,7 +16,6 @@ const MAX_PREAMBLE_SIZE = 16_000; /*16kB*/
 const MAX_HEADER_SIZE = 16_000; /*16kB*/
 const MAX_HEADERS_SIZE = 32_000; /*32kB*/
 const boundaryHeaderRe = /boundary="?([^=";]+)"?/i;
-const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 
 function utf8Encode(
