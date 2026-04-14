@@ -75,10 +75,17 @@ function encodeOctal(
       flipped ||= byte !== 0;
     }
   } else if (value) {
-    const octal = Math.floor(value).toString(8);
-    const pad = length - octal.length - 2;
-    const out = pad >= 0 ? `${'0'.repeat(pad)}${octal} ` : octal;
-    encodeString(target, from, to, out);
+    let idx = to - 2;
+    let num = Math.floor(value);
+    let digits = 0;
+    for (let n = num; n > 0; n = (n - (n % 8)) / 8) digits++;
+    if (digits + 2 <= length) target[idx--] = 0x20;
+    while (num > 0) {
+      const digit = num % 8;
+      target[idx--] = 0x30 + digit;
+      num = (num - digit) / 8;
+    }
+    while (idx >= from) target[idx--] = 0x30;
   }
 }
 
