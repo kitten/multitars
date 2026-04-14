@@ -1,5 +1,17 @@
 # multitars
 
+## 1.0.0
+
+### Major Changes
+
+- Improve decoding performance and avoid copying blocks in unlocked passthrough scenarios
+  Submitted by [@kitten](https://github.com/kitten) (See [#22](https://github.com/kitten/multitars/pull/22))
+
+### Patch Changes
+
+- ⚠️ Fix accidental typo in tar decoder breaking non-PAX GNU long name support
+  Submitted by [@kitten](https://github.com/kitten) (See [#21](https://github.com/kitten/multitars/pull/21))
+
 ## 0.2.5
 
 ### Patch Changes
