@@ -353,6 +353,16 @@ describe('fixtures', () => {
     expect(entries).toMatchSnapshot();
   });
 
+  it('GNU long name spanning multiple blocks', async () => {
+    const entries = await getEntries('./fixtures/tar/gnu-long-name.tar');
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      name: 'dir/' + 'a'.repeat(600) + '.txt',
+      size: 5,
+      text: 'hello',
+    });
+  });
+
   it('null byte', async () => {
     const entries = await getEntries('./fixtures/tar/null-byte.tar');
     expect(entries).toMatchSnapshot();
