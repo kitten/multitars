@@ -76,10 +76,8 @@ function encodeOctal(
     }
   } else if (value) {
     let idx = to - 2;
-    let num = Math.floor(value);
-    let digits = 0;
-    for (let n = num; n > 0; n = (n - (n % 8)) / 8) digits++;
-    if (digits + 2 <= length) target[idx--] = 0x20;
+    let num = value;
+    if (num * 8 <= max) target[idx--] = 0x20;
     while (num > 0) {
       const digit = num % 8;
       target[idx--] = 0x30 + digit;
