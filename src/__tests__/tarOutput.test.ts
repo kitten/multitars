@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 
 import { tar } from '../tarOutput';
 import { untar } from '../tarInput';
-import { TarFile } from '../tarShared';
+import { TarFile, TarTypeFlag, initTarHeader } from '../tarShared';
 import { iterableToStream, streamToBuffer } from './utils';
 
 describe('tar', () => {
@@ -110,6 +110,58 @@ describe('tar', () => {
           lastModified: NOW,
         },
       ]);
+    });
+  });
+
+  describe('encodeOctal field encoding', () => {
+    async function getHeaderBytes(
+      overrides: Partial<ReturnType<typeof initTarHeader>>
+    ) {
+      const header = initTarHeader(null);
+      Object.assign(header, overrides);
+      if (!header.name) header.name = 'x.txt';
+      if (!header.typeflag) header.typeflag = TarTypeFlag.FILE;
+      if (!header.mtime) header.mtime = 1;
+
+      const tarStream = tar(
+        (async function* () {
+          yield new TarFile(new Blob([]).stream(), header);
+        })()
+      );
+      const output = await streamToBuffer(iterableToStream(tarStream));
+      return new Uint8Array(output);
+    }
+
+    function field(buf: Uint8Array, from: number, to: number) {
+      return Buffer.from(buf.slice(from, to)).toString('ascii');
+    }
+
+    it('encodes a typical value with zero-padding, space, and NUL', async () => {
+      const buf = await getHeaderBytes({ mode: 0o644 });
+      expect(field(buf, 100, 108)).toBe('000644 \0');
+    });
+
+    it('encodes zero as all zero bytes', async () => {
+      const buf = await getHeaderBytes({ uid: 0 });
+      expect(field(buf, 108, 116)).toBe('\0\0\0\0\0\0\0\0');
+    });
+
+    it('encodes max 8-byte value without trailing space', async () => {
+      const buf = await getHeaderBytes({ uid: 0o7777777 });
+      expect(field(buf, 108, 116)).toBe('7777777\0');
+    });
+
+    it('encodes a 12-byte field with space and NUL', async () => {
+      const buf = await getHeaderBytes({ size: 1024 });
+      expect(field(buf, 124, 136)).toBe('0000002000 \0');
+    });
+
+    it('roundtrips max 8-byte value through untar', async () => {
+      const buf = await getHeaderBytes({ uid: 0o7777777 });
+      const blob = new Blob([buf]);
+      for await (const entry of untar(blob.stream())) {
+        expect(entry.uid).toBe(0o7777777);
+      }
     });
   });
 });
