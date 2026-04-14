@@ -143,7 +143,7 @@ function encodeBase(target: Uint8Array, header: TarHeader): void {
   if (!header.typeflag) header.typeflag = modeToType(header.mode);
   if (!header.mode)
     header.mode = header.typeflag === TarTypeFlag.DIRECTORY ? 0o755 : 0o644;
-  if (!header.mtime) header.mtime = Math.floor(new Date().valueOf() / 1000);
+  if (!header.mtime) header.mtime = Math.floor(Date.now() / 1000);
 
   encodeString(target, 0, 100, name);
   encodeOctal(target, 100, 108, header.mode & 0o7777);
