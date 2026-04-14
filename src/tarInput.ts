@@ -290,7 +290,11 @@ export async function* untar(
           const buffer = await reader.pull(remaining);
           if (!buffer) throw new Error('Invalid Tar: Unexpected EOF');
           remaining -= buffer.byteLength;
-          controller.enqueue(buffer.slice());
+          controller.enqueue(
+            (reader.blockLocked
+              ? buffer.slice()
+              : buffer) as Uint8Array<ArrayBuffer>
+          );
         }
         if (!remaining) {
           if (!consumedTrailer) {

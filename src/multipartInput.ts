@@ -263,7 +263,11 @@ export async function* parseMultipart(
             if (!buffer)
               throw new Error('Invalid Multipart Part: Unexpected EOF');
             remaining -= buffer.byteLength;
-            controller.enqueue(buffer.slice());
+            controller.enqueue(
+              (reader.blockLocked
+                ? buffer.slice()
+                : buffer) as Uint8Array<ArrayBuffer>
+            );
           }
           if (!remaining) {
             await expectTrailer(reader, boundary);
