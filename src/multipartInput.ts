@@ -16,6 +16,7 @@ const MAX_HEADER_SIZE = 16_000; /*16kB*/
 const MAX_HEADERS_SIZE = 32_000; /*32kB*/
 const boundaryHeaderRe = /boundary="?([^=";]+)"?/i;
 const encoder = new TextEncoder();
+const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 
 function utf8Encode(
   content: string | ArrayBufferView | ArrayBufferLike
@@ -155,7 +156,6 @@ async function decodeHeaders(
   // NOTE: The characters we're decoding in headers is restricted, and we're therefore
   // more strict here. The `stream` option is also omitted below
   let byteLength = 0;
-  const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
   const headers: MultipartHeaders = Object.create(null);
   while (byteLength < MAX_HEADERS_SIZE) {
     let header = '';
