@@ -21,6 +21,7 @@ import {
 const MAX_NAME_LEN = 100;
 const MAX_PREFIX_LEN = 155;
 const MAGIC = 'ustar\0' + '00';
+const PAD = new Uint8Array(BLOCK_SIZE);
 
 // See: https://github.com/mafintosh/tar-stream/blob/126968f/constants.js#L1C1-L8C2
 function modeToType(mode: number) {
@@ -235,7 +236,7 @@ export async function* tar(
       yield encodeHeader(paxHeader);
       yield pax;
       const pad = blockPad(pax.byteLength);
-      if (pad) yield new Uint8Array(pad);
+      if (pad) yield PAD.subarray(0, pad);
     }
 
     yield encodeHeader(header);
@@ -248,7 +249,7 @@ export async function* tar(
     }
 
     const pad = blockPad(entry.size);
-    if (pad) yield new Uint8Array(pad);
+    if (pad) yield PAD.subarray(0, pad);
   }
 
   yield new Uint8Array(BLOCK_SIZE * 2);
