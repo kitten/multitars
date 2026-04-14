@@ -113,14 +113,12 @@ async function decodeLongString(
     let block = await reader.read();
     if (!block || block.byteLength !== reader.blockSize)
       throw new Error('Invalid Tar: Unexpected EOF while parsing long string');
+    remaining -= block.byteLength;
     if (endIndex === -1) {
-      // We fundamentally don't trust that the length is accurate, and we cut off
-      // any strings we parse at the trailing zero byte
       endIndex = block.indexOf(0);
       if (endIndex > -1) block = block.subarray(0, endIndex);
       output += DECODER.decode(block, { stream: true });
     }
-    break;
   }
   output += DECODER.decode();
   return output;
